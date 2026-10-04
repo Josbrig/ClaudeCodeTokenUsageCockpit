@@ -1,0 +1,15 @@
+# Local agent settings and memory (never published)
+.claude/
+CLAUDE.local.md
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Build output (extended once the technology is chosen)
+/build/
+/dist/
+/out/

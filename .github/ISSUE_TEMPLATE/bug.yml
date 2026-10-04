@@ -1,0 +1,30 @@
+name: Bug
+description: Something does not work as specified
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour (with REQ-ID if applicable)
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and platform
+  - type: input
+    id: estimate
+    attributes:
+      label: Estimate (hours)

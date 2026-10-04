@@ -1,0 +1,38 @@
+name: Task / Feature
+description: A single, independently closable unit of work
+labels: []
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: "When done, then ___"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable, one per line
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: input
+    id: requirements
+    attributes:
+      label: Requirements
+      description: "REQ-IDs fulfilled by this issue, e.g. REQ-003, REQ-007 (or 'none')"
+    validations:
+      required: true
+  - type: input
+    id: estimate
+    attributes:
+      label: Estimate (hours)
+      description: "Number, or a range for epics, e.g. 6-12"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes / affected files

@@ -1,0 +1,23 @@
+name: "[HUMAN] Owner step"
+description: A step only the project owner can perform (physical test, decision, approval)
+title: "[HUMAN] "
+labels: ["human"]
+body:
+  - type: textarea
+    id: situation
+    attributes:
+      label: Starting situation
+    validations:
+      required: true
+  - type: textarea
+    id: action
+    attributes:
+      label: Action (step by step)
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected result / options to decide between
+    validations:
+      required: true

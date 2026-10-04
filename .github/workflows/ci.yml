@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Required project files exist
+        run: |
+          missing=0
+          for f in README.md LICENSE CLAUDE.md AGENTS.md CONTRIBUTING.md SECURITY.md CHANGELOG.md \
+                   docs/requirements.md docs/traceability.md docs/project-description.md; do
+            if [ ! -f "$f" ]; then echo "::error file=$f::missing required file"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Requirement IDs are unique
+        run: |
+          dups=$(grep -oE '^### REQ-[0-9]{3}' docs/requirements.md | sort | uniq -d)
+          if [ -n "$dups" ]; then echo "::error::duplicate requirement IDs: $dups"; exit 1; fi
+          echo "$(grep -cE '^### REQ-[0-9]{3}' docs/requirements.md) requirements, all IDs unique"
