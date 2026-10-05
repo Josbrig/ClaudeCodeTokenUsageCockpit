@@ -284,3 +284,34 @@ fn req_025_appends_during_pruning_are_not_lost() {
     assert_eq!(times.len(), 300, "a record was lost or written twice");
     assert!(times[0] >= NOW_MS - 35 * DAY_MS);
 }
+
+#[test]
+fn req_115_pruning_keeps_lines_of_a_newer_format_version() {
+    // Lines written by a newer version are not destroyed just because they are not understood:
+    // they only go when their receive time is known and too old.
+    let dir = tempfile::tempdir().unwrap();
+    let recent = NOW_MS - DAY_MS;
+    let old = NOW_MS - 60 * DAY_MS;
+    let text = format!(
+        "{{\"v\":2,\"received_at_ms\":{recent},\"future\":true}}\n\
+         {{\"v\":2,\"received_at_ms\":{old}}}\n\
+         {{\"v\":2,\"no_time\":1}}\n\
+         {{\"v\":1,\"received_at_ms\":{recent}}}\n\
+         {{\"received_at_ms\":{recent}}}\n"
+    );
+    fs::write(dir.path().join(HISTORY_FILE), text).unwrap();
+    let stats = prune_history_default(dir.path(), NOW_MS).unwrap();
+    // Gone: the old v2 line and the line without a version. Kept: both recent kinds and the
+    // v2 line without a time.
+    assert_eq!(
+        stats,
+        PruneStats {
+            removed: 2,
+            kept: 3
+        }
+    );
+    let left = String::from_utf8(history_bytes(dir.path())).unwrap();
+    assert!(left.contains("\"future\":true"));
+    assert!(left.contains("\"no_time\":1"));
+    assert!(!left.contains(&old.to_string()));
+}
