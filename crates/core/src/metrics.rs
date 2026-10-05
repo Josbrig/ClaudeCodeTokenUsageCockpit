@@ -2,7 +2,7 @@
 //! Calculations on the usage of one window (concept §7). All functions are pure: they get the
 //! time as a parameter and never read a clock.
 
-use crate::model::WindowKind;
+use crate::model::{Record, WindowKind};
 use crate::periods::Period;
 
 /// Length of the 5-hour window in seconds.
@@ -195,4 +195,30 @@ pub fn binding(five: Option<&Forecast>, seven: Option<&Forecast>) -> Option<Wind
         (None, Some(_)) => Some(WindowKind::SevenDay),
         (None, None) => None,
     }
+}
+
+/// Age of a record in whole seconds at `now_ms` (concept §7.9, REQ-009). A record that lies
+/// in the future (clock difference) has age 0.
+pub fn data_age_s(latest: &Record, now_ms: i64) -> i64 {
+    (now_ms - latest.received_at_ms).max(0) / 1000
+}
+
+/// Whether the displayed data counts as stale (concept §7.9, REQ-009 and REQ-108).
+///
+/// Stale when the newest record is older than `stale_after_s` seconds, or when the newest
+/// malformed input (`last_error_ms`) is more recent than the newest record `latest_ms`: the
+/// last values are then kept but marked at once.
+pub fn is_stale(
+    age_s: i64,
+    stale_after_s: u32,
+    last_error_ms: Option<i64>,
+    latest_ms: i64,
+) -> bool {
+    age_s > i64::from(stale_after_s) || last_error_ms.is_some_and(|error_ms| error_ms > latest_ms)
+}
+
+/// The most recently received record, whichever Claude Code session delivered it (REQ-017).
+/// With equal receive times the later one in the list wins.
+pub fn latest(records: &[Record]) -> Option<&Record> {
+    records.iter().max_by_key(|r| r.received_at_ms)
 }
