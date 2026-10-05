@@ -111,3 +111,60 @@ pub fn rate(period: &Period, now_s: i64, rate_period_s: i64) -> Option<f64> {
     let slope = sxy / sxx;
     slope.is_finite().then(|| slope.max(0.0))
 }
+
+/// What the current usage rate means for the end of the window (concept §7.4, REQ-005).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Forecast {
+    /// The limit is reached already.
+    LimitReached,
+    /// At the current rate the limit is reached at `at_s` (Unix seconds), before the reset.
+    LimitFirst {
+        /// Predicted time at which 100 % is reached.
+        at_s: i64,
+    },
+    /// The reset comes first: the limit is not reached at the current rate.
+    ResetFirst,
+    /// There is no usage rate to base a forecast on.
+    NotAvailable,
+}
+
+/// Forecast of the exhaustion time. Checked in this order: usage at 100 % (limit reached),
+/// no rate (not available), rate 0 (reset first), otherwise the time at which 100 % would be
+/// reached is compared with the reset; reaching 100 % exactly at the reset counts as reset
+/// first.
+pub fn forecast(used: f64, resets_at: i64, rate: Option<f64>, now_s: i64) -> Forecast {
+    let used = used.clamp(0.0, 100.0);
+    if used >= 100.0 {
+        return Forecast::LimitReached;
+    }
+    let Some(rate) = rate else {
+        return Forecast::NotAvailable;
+    };
+    if rate <= 0.0 {
+        return Forecast::ResetFirst;
+    }
+    let secs_to_limit = ((100.0 - used) / rate * 3600.0).round();
+    let at_s = now_s.saturating_add(secs_to_limit as i64);
+    if at_s < resets_at {
+        Forecast::LimitFirst { at_s }
+    } else {
+        Forecast::ResetFirst
+    }
+}
+
+/// Share of the quota (percent) that would remain unused at the reset if the current rate
+/// continued (concept §7.5, REQ-006). `None` without a rate.
+pub fn unused_at_reset(used: f64, resets_at: i64, rate: Option<f64>, now_s: i64) -> Option<f64> {
+    let used = used.clamp(0.0, 100.0);
+    let rate = rate?;
+    let hours_left = (resets_at - now_s).max(0) as f64 / 3600.0;
+    Some((100.0 - (used + rate * hours_left)).max(0.0))
+}
+
+/// Usage rate in percent per hour that would use up the remaining quota exactly at the reset
+/// (concept §7.6, REQ-007). `None` once the reset time has been reached.
+pub fn recommended_rate(used: f64, resets_at: i64, now_s: i64) -> Option<f64> {
+    let used = used.clamp(0.0, 100.0);
+    let secs_left = resets_at - now_s;
+    (secs_left > 0).then(|| (100.0 - used) / (secs_left as f64 / 3600.0))
+}
