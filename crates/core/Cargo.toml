@@ -1,0 +1,10 @@
+[package]
+name = "cockpit-core"
+description = "Calculations, data store and view model of the usage cockpit (no GUI code)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "cockpit_core"

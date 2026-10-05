@@ -1,0 +1,11 @@
+[package]
+name = "usage-cockpit"
+description = "Always-on-top cockpit for Claude usage limits, including the status line bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "usage-cockpit"
+path = "src/main.rs"
