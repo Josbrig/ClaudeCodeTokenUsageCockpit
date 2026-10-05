@@ -198,6 +198,20 @@ mod tests {
     }
 
     #[test]
+    fn req_109_bridge_accepts_input_of_exactly_one_mebibyte() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefix = r#"{"padding":""#;
+        let suffix = r#""}"#;
+        let fill = MAX_INPUT_BYTES as usize - prefix.len() - suffix.len();
+        let exact = format!("{prefix}{}{suffix}", "x".repeat(fill));
+        assert_eq!(exact.len() as u64, MAX_INPUT_BYTES);
+        let (code, text) = run_with(&exact, dir.path());
+        assert_eq!(code, 0);
+        assert_eq!(text, "5h – · 7d –\n", "exactly the limit is still accepted");
+        assert!(read_latest(dir.path()).unwrap().is_some());
+    }
+
+    #[test]
     fn req_109_bridge_exit_zero_on_unwritable_dir() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("a-file");
