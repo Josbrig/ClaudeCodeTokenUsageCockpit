@@ -214,3 +214,17 @@ fn req_018_window_of_the_wrong_type_uses_defaults() {
     fs::write(&path, "window = 5\n").unwrap();
     assert_eq!(load(&path).window, WindowSettings::default());
 }
+
+#[test]
+fn req_024_utf8_byte_order_mark_is_accepted() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = settings_path(&dir);
+    let mut bytes = vec![0xEF, 0xBB, 0xBF];
+    bytes.extend_from_slice(b"tolerance_pp = 9.0\n");
+    fs::write(&path, bytes).unwrap();
+    assert_eq!(load(&path).tolerance_pp, 9.0);
+    assert!(
+        path.exists(),
+        "a file with a byte order mark is not invalid"
+    );
+}

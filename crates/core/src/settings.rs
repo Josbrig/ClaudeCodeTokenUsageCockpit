@@ -127,29 +127,36 @@ pub fn load(path: &Path) -> Settings {
             return Settings::default();
         }
     };
-    let table = String::from_utf8(bytes)
+    // Some Windows editors put a byte order mark at the start of a UTF-8 file.
+    let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+    let table = std::str::from_utf8(bytes)
         .ok()
         .and_then(|text| text.parse::<Table>().ok());
     let Some(table) = table else {
-        let moved = quarantine(path);
-        log::warn!(
-            "settings: {} is not valid TOML; using defaults (kept as {})",
-            path.display(),
-            moved.display()
-        );
+        match quarantine(path) {
+            Some(moved) => log::warn!(
+                "settings: {} is not valid TOML; using defaults (kept as {})",
+                path.display(),
+                moved.display()
+            ),
+            None => log::warn!(
+                "settings: {} is not valid TOML and could not be moved away; using defaults",
+                path.display()
+            ),
+        }
         return Settings::default();
     };
     from_table(&table)
 }
 
-/// Renames an invalid settings file to `<name>.invalid`, replacing an older one.
-fn quarantine(path: &Path) -> PathBuf {
+/// Renames an invalid settings file to `<name>.invalid`, replacing an older one. Returns the
+/// new path, or `None` if the file could not be moved.
+fn quarantine(path: &Path) -> Option<PathBuf> {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".invalid");
     let target = path.with_file_name(name);
     let _ = fs::remove_file(&target);
-    let _ = fs::rename(path, &target);
-    target
+    fs::rename(path, &target).ok().map(|()| target)
 }
 
 fn from_table(table: &Table) -> Settings {
