@@ -3,6 +3,7 @@
 //! time as a parameter and never read a clock.
 
 use crate::model::WindowKind;
+use crate::periods::Period;
 
 /// Length of the 5-hour window in seconds.
 pub const FIVE_HOUR_S: i64 = 18_000;
@@ -76,4 +77,37 @@ pub fn basic(used: f64, resets_at: i64, window_len_s: i64, now_s: i64, tol_pp: f
         pace_factor: (target > 0.0).then(|| used / target),
         state,
     }
+}
+
+const MS_PER_HOUR: f64 = 3_600_000.0;
+
+/// Current usage rate of a window in percent per hour (concept §7.3).
+///
+/// Uses the samples of `period` received within the last `rate_period_s` seconds before
+/// `now_s` and fits a straight line through them by least squares; the rate is its slope.
+/// Without two samples at distinct times the rate is not available (`None`). A falling usage
+/// (a negative slope) is reported as 0.
+pub fn rate(period: &Period, now_s: i64, rate_period_s: i64) -> Option<f64> {
+    let cutoff_ms = now_s.saturating_sub(rate_period_s).saturating_mul(1000);
+    let samples: Vec<(f64, f64)> = {
+        let recent: Vec<&(i64, f64)> = period.samples.iter().filter(|s| s.0 >= cutoff_ms).collect();
+        let first_ms = recent.iter().map(|s| s.0).min()?;
+        recent
+            .iter()
+            .map(|&&(ms, pct)| ((ms - first_ms) as f64 / MS_PER_HOUR, pct))
+            .collect()
+    };
+    let n = samples.len() as f64;
+    let mean_t = samples.iter().map(|s| s.0).sum::<f64>() / n;
+    let mean_u = samples.iter().map(|s| s.1).sum::<f64>() / n;
+    let sxx: f64 = samples.iter().map(|s| (s.0 - mean_t).powi(2)).sum();
+    if sxx <= 0.0 {
+        return None; // all samples at the same time (or fewer than two)
+    }
+    let sxy: f64 = samples
+        .iter()
+        .map(|s| (s.0 - mean_t) * (s.1 - mean_u))
+        .sum();
+    let slope = sxy / sxx;
+    slope.is_finite().then(|| slope.max(0.0))
 }
