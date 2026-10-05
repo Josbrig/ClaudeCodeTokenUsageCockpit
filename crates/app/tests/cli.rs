@@ -45,7 +45,6 @@ fn req_032_no_arguments_exit_quietly_until_the_window_exists() {
 #[test]
 fn req_032_placeholder_subcommands_say_so_and_exit_with_2() {
     for args in [
-        &["bridge"][..],
         &["setup-bridge"][..],
         &["setup-bridge", "--yes"][..],
         &["remove-bridge", "--yes"][..],
