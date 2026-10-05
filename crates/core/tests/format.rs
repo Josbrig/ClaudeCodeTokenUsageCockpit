@@ -179,3 +179,9 @@ fn req_026_dst_change_in_spring_shortens_the_clock_difference() {
 fn req_002_a_timestamp_out_of_range_shows_a_dash() {
     assert_eq!(local_time(i64::MAX, &Utc), "–");
 }
+
+#[test]
+fn req_005_forecast_text_does_not_overflow_for_extreme_times() {
+    let text = forecast(&Forecast::LimitFirst { at_s: i64::MAX }, i64::MIN);
+    assert!(text.starts_with("limit in "), "{text}");
+}

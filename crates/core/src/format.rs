@@ -139,7 +139,10 @@ pub fn forecast(forecast: &Forecast, now_s: i64) -> String {
     match forecast {
         Forecast::LimitReached => "limit reached".to_owned(),
         Forecast::LimitFirst { at_s } => {
-            format!("limit in {}, before reset", duration(at_s - now_s))
+            format!(
+                "limit in {}, before reset",
+                duration(at_s.saturating_sub(now_s))
+            )
         }
         Forecast::ResetFirst => "reset first".to_owned(),
         Forecast::NotAvailable => NOT_AVAILABLE.to_owned(),
