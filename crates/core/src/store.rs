@@ -30,7 +30,7 @@ pub const HISTORY_FILE: &str = "history-v1.jsonl";
 pub const HISTORY_LOCK_FILE: &str = "history.lock";
 
 const FORMAT_VERSION: u32 = 1;
-const RENAME_ATTEMPTS_WINDOWS: u32 = 5;
+const RENAME_RETRIES_WINDOWS: u32 = 5;
 const RENAME_PAUSE: Duration = Duration::from_millis(20);
 const LOCK_POLL: Duration = Duration::from_millis(10);
 
@@ -100,8 +100,9 @@ fn temp_path_for(target: &Path) -> PathBuf {
 /// `rename` replaces an existing target. On Windows a reader that has the target open for a
 /// moment makes it fail with `PermissionDenied`; that is retried a few times.
 fn rename_with_retry(from: &Path, to: &Path) -> io::Result<()> {
+    // The first try plus up to five retries on Windows; a single try elsewhere.
     let attempts = if cfg!(windows) {
-        RENAME_ATTEMPTS_WINDOWS
+        1 + RENAME_RETRIES_WINDOWS
     } else {
         1
     };
