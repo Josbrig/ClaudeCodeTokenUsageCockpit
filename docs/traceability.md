@@ -4,7 +4,7 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 
 | REQ | Issues | PRs | Tests | Status |
 |-----|--------|-----|-------|--------|
-| REQ-001 – REQ-019 | – | – | – | draft |
-| REQ-101 – REQ-108 | – | – | – | draft |
+| REQ-001 – REQ-033 | – | – | – | draft |
+| REQ-101 – REQ-116 | – | – | – | draft |
 
 Rows are split per requirement as soon as implementation issues exist.

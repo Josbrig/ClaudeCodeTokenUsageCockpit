@@ -5,7 +5,15 @@ Only the project owner sets `approved`. IDs are never reused, even after rejecti
 Statements follow the EARS pattern where it fits ("When <trigger>, the cockpit shall <response>").
 Numeric targets marked *(proposal)* are initial values to be confirmed during approval.
 
-All requirements below are a **first draft** derived from the [project brief](project-brief.md) and the [research note](research/data-sources.md).
+All requirements below are a **draft** derived from the [project brief](project-brief.md), the [project description](project-description.md) and the [research note](research/data-sources.md). Second revision 2026-10-05: gaps for a finished, tested version closed with REQ-020 to REQ-033 and REQ-109 to REQ-116.
+
+Terms used below:
+
+- **Window:** one of the two usage limits, the 5-hour window or the 7-day (weekly) window.
+- **Record:** one set of values delivered by Claude Code to the status line command at one point in time.
+- **Bridge:** the small helper started by Claude Code as status line command; it hands each record to the cockpit.
+- **Cockpit:** the window application that displays the data.
+- **Compact view / detailed view:** the small always-visible display and the larger view with all statistics.
 
 ## Functional requirements
 
@@ -30,7 +38,7 @@ All requirements below are a **first draft** derived from the [project brief](pr
 - Type: functional · Origin: brief · Status: draft
 
 ### REQ-005 Exhaustion forecast
-- Statement: When at least two usage records exist within a window, the cockpit shall forecast the time at which 100 % would be reached at the current usage rate and show whether this is before or after the reset.
+- Statement: When at least two usage records exist within a window, the cockpit shall forecast the time at which 100 % would be reached at the current usage rate (REQ-021) and show whether this is before or after the reset.
 - Acceptance: A synthetic series with a constant rate of 20 %/h starting at 40 % forecasts exhaustion in 3 h; if the reset is in 2 h, "reset first" is shown.
 - Type: functional · Origin: brief · Status: draft
 
@@ -104,6 +112,76 @@ All requirements below are a **first draft** derived from the [project brief](pr
 - Acceptance: To be defined after the owner decision on source C.
 - Type: functional · Origin: research (source C) · Status: draft, blocked by owner decision
 
+### REQ-020 Bridge record hand-over
+- Statement: When Claude Code runs the bridge with a record on standard input, the bridge shall store the record for the cockpit in a per-user data directory, written so that a reader never sees a partially written file, and shall then print a status line text and exit.
+- Acceptance: Feeding 1,000 records in a row while a reader polls the data file never yields an unparsable file; each record appears in the data store with the time it was received.
+- Type: functional · Origin: research (source A; Claude Code cancels a running status line command when a new update arrives) · Status: draft
+
+### REQ-021 Usage rate from the current window
+- Statement: The cockpit shall compute the current usage rate of a window in percent per hour from the records of the current window only, over a sliding period of 30 minutes *(proposal, configurable)*; with fewer than two records in that period the rate shall be shown as not available.
+- Acceptance: Records at 10:00 (40 %), 10:15 (45 %) and 10:30 (50 %) give 20 %/h; a single record gives "not available"; records from the previous window are ignored.
+- Type: functional · Origin: derived (needed by REQ-005 to REQ-007) · Status: draft
+
+### REQ-022 Window reset detection
+- Statement: When the reset time of a window passes or a record carries a later reset time than the previous record, the cockpit shall start a new window period, so that values from different periods are never combined in one calculation.
+- Acceptance: A record series crossing a reset (used 95 % → 3 %, reset time moves forward by 5 h) produces two separate periods; rate, forecast and pace use only the new period; the history keeps both.
+- Type: functional · Origin: derived · Status: draft
+
+### REQ-023 Bridge setup and removal
+- Statement: The cockpit shall offer to set up the bridge as the Claude Code status line command and to remove it again; before changing the Claude Code settings file it shall ask for consent and save a backup, and removal shall restore the previous status line setting.
+- Acceptance: Setup on a settings file without a status line adds the bridge entry and creates a backup; setup on a file with an existing status line keeps that command for REQ-012; removal restores the file to its previous status line content; declining consent leaves the file byte-identical.
+- Type: functional · Origin: derived (REQ-012) · Status: draft
+
+### REQ-024 Settings
+- Statement: The cockpit shall store its settings (pace tolerance band, stale threshold, rate period, always-on-top, view mode, window position and size) in a per-user configuration file and shall start with documented defaults when the file is missing or invalid.
+- Acceptance: Changing the tolerance band in the settings view persists across a restart; deleting or corrupting the file starts the cockpit with defaults and a log entry.
+- Type: functional · Origin: derived · Status: draft
+
+### REQ-025 History retention
+- Statement: The cockpit shall keep the local history for at least 35 days *(proposal)* and shall remove older records automatically, keeping the data store below 50 MB *(proposal)*.
+- Acceptance: With synthetic records spanning 60 days, records older than 35 days are removed at start-up or within one hour of running; the store stays below the size limit.
+- Type: functional · Origin: derived (REQ-013) · Status: draft
+
+### REQ-026 Time display
+- Statement: The cockpit shall show reset times in the local time zone of the computer and compute all durations from absolute timestamps, so that daylight-saving changes do not distort durations.
+- Acceptance: A reset time across a daylight-saving change (e.g. 2026-10-25 in Central Europe) shows the correct local clock time and the correct remaining duration.
+- Type: functional · Origin: derived · Status: draft
+
+### REQ-027 Weekly planning
+- Statement: While both windows are available, the cockpit shall show how many 5-hour windows remain until the weekly reset and the share of the weekly quota per remaining 5-hour window that would use the weekly quota exactly by its reset.
+- Acceptance: 60 % of the week remaining and 50 h to the weekly reset give 10 remaining 5-hour windows and 6 % of the weekly quota per window.
+- Type: functional · Origin: project description ("across windows") · Status: draft
+
+### REQ-028 Session details
+- Statement: Where present in the latest record, the detailed view shall show the active model, the context window usage and the estimated session cost, labelled as delivered by Claude Code.
+- Acceptance: A record with model, context usage 8 % and cost 0.01234 USD shows these three values; a record without them shows "no data" for each.
+- Type: functional · Origin: project description (raw data of source A) · Status: draft
+
+### REQ-029 Compact and detailed view
+- Statement: The cockpit shall offer a compact view with the pace state, usage and time to reset of both windows, and a detailed view with all metrics of REQ-003 to REQ-008, REQ-014, REQ-015, REQ-027 and REQ-028; the user shall switch between them with one action.
+- Acceptance: In the compact view both pace indicators are visible in a window of at most 320 × 120 logical pixels *(proposal)*; one click or key switches to the detailed view and back.
+- Type: functional · Origin: brief (small window, all statistics) · Status: draft
+
+### REQ-030 Usage history chart
+- Statement: The detailed view shall show a chart of usage over time for the current period of each window together with the linear target line.
+- Acceptance: With a synthetic series, the chart shows the recorded points, the target line from 0 % at the period start to 100 % at the reset, and the current time.
+- Type: functional · Origin: brief ("graphical visualisation") · Status: draft
+
+### REQ-031 Logging
+- Statement: The cockpit and the bridge shall write a log file in the per-user data directory with timestamps and severity, limited to 5 MB *(proposal)* by rotation, and shall never write credentials or full record contents beyond the fields they use.
+- Acceptance: Triggering a malformed record produces a log line with time and severity; after 6 MB of log output the active log file is below 5 MB; a search of the log for "token", "key" and "authorization" values finds none.
+- Type: functional · Origin: derived (REQ-104, REQ-108) · Status: draft
+
+### REQ-032 Version information
+- Statement: The executable shall report its version and build commit on request from the command line, and the detailed view shall show the version and a link to the licence notices.
+- Acceptance: Running the executable with `--version` prints the version and commit and exits with code 0; the detailed view shows the same version.
+- Type: functional · Origin: derived · Status: draft
+
+### REQ-033 Single instance
+- Statement: When the cockpit is started while another cockpit instance of the same user is running, the new instance shall bring the running one to the front or exit with a message, and shall not run a second display.
+- Acceptance: Starting the cockpit twice results in exactly one cockpit window.
+- Type: functional · Origin: derived · Status: draft
+
 ## Non-functional requirements
 
 ### REQ-101 Single executable
@@ -145,3 +223,43 @@ All requirements below are a **first draft** derived from the [project brief](pr
 - Statement: When a data source delivers unknown or malformed data, the cockpit shall keep running, keep the last valid values marked as stale, and report the problem in a log.
 - Acceptance: Feeding malformed records does not crash the cockpit; the last valid values remain with a stale marker.
 - Type: non-functional (reliability) · Origin: research · Status: draft
+
+### REQ-109 Bridge speed and fallback output
+- Statement: The bridge shall finish within 100 ms *(proposal)* on the reference platforms and shall always print a status line text, also when the record is malformed or the data directory is not writable.
+- Acceptance: Median run time over 100 calls is below 100 ms on each target platform; with a malformed record or a read-only data directory the bridge still prints a text and exits with code 0.
+- Type: non-functional (performance, reliability) · Origin: research (Claude Code cancels slow status line commands) · Status: draft
+
+### REQ-110 Automated tests
+- Statement: All calculations (REQ-003 to REQ-008, REQ-021, REQ-022, REQ-027), the record parser and the bridge shall be covered by automated tests whose names contain the REQ-ID, and the tests shall run in CI on every pull request.
+- Acceptance: The CI log of a pull request lists passing tests for each of these REQ-IDs.
+- Type: non-functional (quality) · Origin: derived (working model) · Status: draft
+
+### REQ-111 Release builds in CI
+- Statement: CI shall build the executable for all target platforms of REQ-102 from the same commit and attach the files to a release draft when the owner requests a release.
+- Acceptance: A CI run on the release branch or tag produces four executables with the version in their names and a checksum file.
+- Type: non-functional (delivery) · Origin: brief · Status: draft
+
+### REQ-112 User documentation
+- Statement: The repository shall contain user documentation covering download and start per platform, bridge setup and removal, data and configuration locations, the meaning of every displayed value, uninstalling, and troubleshooting.
+- Acceptance: A person who has not seen the project can set up and remove the bridge on one platform using only the documentation.
+- Type: non-functional (usability) · Origin: derived · Status: draft
+
+### REQ-113 Display scaling
+- Statement: The cockpit shall render sharply and keep its layout at display scaling factors from 100 % to 200 %.
+- Acceptance: Screenshots at 100 %, 150 % and 200 % show no clipped text and no blurred graphics.
+- Type: non-functional (usability) · Origin: derived · Status: draft
+
+### REQ-114 Colour-independent states
+- Statement: All states (pace, stale, no data, binding limit) shall be distinguishable without colour, and the colours used shall remain distinguishable with common colour-vision deficiencies.
+- Acceptance: A greyscale screenshot still shows every state; a check with a colour-blindness simulator (deuteranopia, protanopia) shows distinct states.
+- Type: non-functional (accessibility) · Origin: derived (REQ-003, REQ-106) · Status: draft
+
+### REQ-115 Data format versioning
+- Statement: Every file written by the bridge or the cockpit shall carry a format version, and a newer cockpit shall read files written by older versions.
+- Acceptance: A data store written with format version 1 is read correctly after an upgrade to a version that writes format version 2.
+- Type: non-functional (maintainability) · Origin: derived (REQ-108) · Status: draft
+
+### REQ-116 Start-up time
+- Statement: The cockpit shall show its window within 2 seconds *(proposal)* of being started on the reference platforms.
+- Acceptance: Measured over 5 starts on each target platform.
+- Type: non-functional (performance) · Origin: derived ("small tool window") · Status: draft
