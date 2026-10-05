@@ -1,0 +1,7 @@
+{
+  "session_id": "test-session-0003",
+  "version": "2.1.90",
+  "model": { "display_name": "Test Model" },
+  "context_window": { "used_percentage": null },
+  "cost": { "total_cost_usd": 0.5 }
+}

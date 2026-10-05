@@ -1,0 +1,15 @@
+{
+  "session_id": "test-session-0004",
+  "version": "2.1.90",
+  "model": { "id": "test-model", "display_name": "Test Model", "future_field": [1, 2, 3] },
+  "workspace": { "current_dir": "/synthetic/dir", "project_dir": "/synthetic/dir" },
+  "output_style": { "name": "default" },
+  "unknown_top_level": { "nested": true },
+  "context_window": { "used_percentage": 8, "extra": "ignored" },
+  "cost": { "total_cost_usd": 0.01234, "total_duration_ms": 45000 },
+  "rate_limits": {
+    "five_hour": { "used_percentage": 23.5, "resets_at": 1738425600, "extra": 1 },
+    "seven_day": { "used_percentage": 41.2, "resets_at": 1738857600 },
+    "spend_limit": { "used_percentage": 62.8, "resets_at": 1740787200, "used_usd": 314.12, "limit_usd": 500 }
+  }
+}
