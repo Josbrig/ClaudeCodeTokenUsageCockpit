@@ -322,13 +322,29 @@ Settings dialog: fields of §9 with validation; "Save" writes the file.
 
 ### 11.4 View model
 
-`cockpit-core::viewmodel::build(now, &records, &settings, &transcript_stats) -> ViewModel` returns all strings, numbers and states the views draw. The GUI code only lays out what the view model provides; all decisions are unit-tested there.
+`cockpit-core::viewmodel::build(&Inputs) -> ViewModel` returns all strings, numbers and states the views draw. The GUI code only lays out what the view model provides; all decisions are unit-tested there.
+
+```rust
+pub struct Inputs<'a, Tz: chrono::TimeZone> {
+    pub now_ms: i64,                    // Unix milliseconds
+    pub records: &'a [Record],          // full history, received order
+    pub last_error_ms: Option<i64>,     // from last_error.json
+    pub load_error: Option<&'a str>,    // e.g. data directory unreadable (§11.7)
+    pub settings: &'a Settings,
+    pub stats: Option<&'a Stats>,       // transcript statistics (§8)
+    pub tz: &'a Tz,                     // chrono::Local in the app, a fixed zone in tests
+}
+```
+
+The exact `ViewModel` structure is defined in the view model issues; it contains no egui types.
 
 ### 11.5 Formatting
 
 - Percentages always with one decimal (`4.5%`, `23.5%`, `62.0%`), rounded half away from zero.
-- Durations: `< 1 h` → `42m`; `< 24 h` → `1h 12m`; otherwise `3d 4h`.
-- Local times via `chrono::Local`, format `Mon 14:30`; durations always from absolute timestamps (REQ-026).
+- Durations: `< 1 h` → `42m`; `< 24 h` → `1h 12m`; otherwise `3d 4h`; negative → `0m`.
+- Local times in the zone passed in (`chrono::Local` in the app), format `Mon 14:30`; durations always from absolute timestamps (REQ-026).
+- Data age: `updated 12 s ago` (< 60 s), `updated 4 min ago` (< 60 min), otherwise `updated 2h 5m ago`; when stale: `stale, 14 min old` (same duration rules).
+- Metric texts: deviation `+20.0 pp` / `−3.5 pp`; pace factor `1.50×` or `–` when undefined; rates `20.0 %/h` or `not available`; forecast `limit in 3h 0m, before reset` / `reset first` / `limit reached` / `not available`; projected unused `40.0% unused at reset`; recommended `10.0 %/h`; weekly plan `10 windows left · 6.0% per window`.
 
 ### 11.6 Platform behaviour
 
