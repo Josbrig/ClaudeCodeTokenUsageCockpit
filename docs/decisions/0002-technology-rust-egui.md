@@ -34,18 +34,20 @@ Builds run natively on GitHub-hosted runners, no cross-compilation:
 |---|---|
 | Windows x64 | `windows-latest` |
 | macOS arm64 | `macos-latest` (Apple Silicon) |
-| Linux x64 | `ubuntu-22.04` |
-| Linux arm64 (Raspberry Pi) | `ubuntu-22.04-arm` |
+| Linux x64 | `ubuntu-24.04`, build inside a `debian:bookworm` container |
+| Linux arm64 (Raspberry Pi, 64-bit OS) | `ubuntu-24.04-arm`, build inside a `debian:bookworm` container |
 
-The Ubuntu 22.04 runners keep the required C library version low enough for current Raspberry Pi OS and most desktop distributions.
+Building the Linux executables inside a Debian 12 (bookworm) container fixes the required C library at glibc 2.36, the version of current 64-bit Raspberry Pi OS; the executables then also run on newer distributions. The Ubuntu 22.04 runner images are not used because GitHub retires them (deprecation from 2026-09-17, unsupported from 2027-04-17).
 
 ## Consequences
 
 - The Linux executable uses the system's windowing and OpenGL libraries, which every desktop installation provides; this is not a separately installed runtime in the sense of REQ-101. The bridge mode must not need them; this is checked in the first prototype on a system without a display.
 - egui redraws only on input or on request, so idle CPU stays low if the cockpit requests repaints at a modest interval (for example once per second for the countdown).
-- The always-on-top behaviour depends on the window manager on Linux (documented limitation of the underlying window library); Windows and macOS support it directly.
-- Unsigned executables trigger warnings on macOS and Windows; signing is a separate owner decision (#6).
-- Dependencies are pinned in `Cargo.lock`; a licence inventory is generated in CI (REQ-107).
+- **Always-on-top and window position on Linux:** under Wayland a client can neither keep itself on top nor set or restore its own position; current Raspberry Pi OS uses Wayland by default. On Linux the cockpit therefore starts through X11 (natively or via XWayland) where available, and documents the remaining limitation. Whether XWayland honours always-on-top on Raspberry Pi OS is verified on real hardware by the owner. Windows and macOS support both directly.
+- **Windows console output:** the executable is built as a GUI application so that no console window opens on double-click. Bridge mode writes to the standard output that Claude Code passes in as a pipe, which works for GUI applications; for `--version` typed in a terminal the program attaches to the parent console.
+- **macOS:** unsigned, non-notarised downloads are blocked on current macOS until the user allows them once in System Settings → Privacy & Security; the user documentation describes this. Windows shows a SmartScreen warning. Signing is a separate owner decision (#6).
+- **Scope:** Linux arm64 means 64-bit Raspberry Pi OS (or another 64-bit distribution); 32-bit Raspberry Pi OS is not a target.
+- **Licences:** dependencies are pinned in `Cargo.lock`; a licence inventory is generated in CI (REQ-107). It includes the fonts bundled by egui, which use font licences (SIL Open Font License 1.1, Ubuntu Font Licence) that permit redistribution; the licence check is configured to allow them explicitly.
 
 ## Minimal always-on-top proof
 
@@ -58,3 +60,4 @@ The first implementation issue builds a window of 320 × 120 logical pixels with
 - Fyne needs cgo and a C compiler per target: <https://docs.fyne.io/started/cross-compiling/>
 - .NET Native AOT has no cross-OS compilation: <https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/cross-compile>
 - GitHub-hosted arm64 runners for public repositories (generally available, labels `ubuntu-24.04-arm`, `ubuntu-22.04-arm`, `windows-11-arm`): <https://github.blog/changelog/2025-08-07-arm64-hosted-runners-for-public-repositories-are-now-generally-available/>
+- Retirement of the Ubuntu 22.04 runner images: <https://github.com/actions/runner-images/issues/14254>
