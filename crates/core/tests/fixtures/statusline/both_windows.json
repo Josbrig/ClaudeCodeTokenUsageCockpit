@@ -1,0 +1,11 @@
+{
+  "session_id": "test-session-0001",
+  "version": "2.1.90",
+  "model": { "id": "test-model", "display_name": "Test Model" },
+  "context_window": { "used_percentage": 8 },
+  "cost": { "total_cost_usd": 0.01234 },
+  "rate_limits": {
+    "five_hour": { "used_percentage": 23.5, "resets_at": 1738425600 },
+    "seven_day": { "used_percentage": 41.2, "resets_at": 1738857600 }
+  }
+}
