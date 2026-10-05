@@ -38,12 +38,12 @@ Terms used below:
 - Type: functional · Origin: brief · Status: draft
 
 ### REQ-005 Exhaustion forecast
-- Statement: When at least two usage records exist within a window, the cockpit shall forecast the time at which 100 % would be reached at the current usage rate (REQ-021) and show whether this is before or after the reset.
+- Statement: When a current usage rate is available (REQ-021), the cockpit shall forecast the time at which 100 % would be reached at that rate and show whether this is before or after the reset; otherwise it shall show the forecast as not available.
 - Acceptance: A synthetic series with a constant rate of 20 %/h starting at 40 % forecasts exhaustion in 3 h; if the reset is in 2 h, "reset first" is shown.
 - Type: functional · Origin: brief · Status: draft
 
 ### REQ-006 Projected unused remainder
-- Statement: For each window, the cockpit shall show the share of the quota that would remain unused at the reset if the current usage rate continued.
+- Statement: When a current usage rate is available (REQ-021), the cockpit shall show for each window the share of the quota that would remain unused at the reset if that rate continued; otherwise it shall show the value as not available.
 - Acceptance: Rate 5 %/h, 40 % used, reset in 4 h: projected unused remainder 40 %.
 - Type: functional · Origin: brief · Status: draft
 
@@ -83,8 +83,8 @@ Terms used below:
 - Type: functional · Origin: brief ("all derivable data") · Status: draft
 
 ### REQ-014 Absolute token statistics
-- Statement: Where local session transcripts are readable, the cockpit shall display absolute token counts per model, split into input, output and cache, and shall degrade gracefully when the format is not understood.
-- Acceptance: With sample transcripts, totals per model match a reference count; an unknown format produces a "not available" notice, not a crash.
+- Statement: Where local session transcripts are readable, the cockpit shall display absolute token counts per model, split into input, output and cache, the cache share, and daily totals for the retained history (REQ-025), and shall degrade gracefully when the format is not understood.
+- Acceptance: With sample transcripts, totals per model and per day match a reference count and the cache share equals cache tokens ÷ all input tokens; an unknown format produces a "not available" notice, not a crash.
 - Type: functional · Origin: research (source B) · Status: draft
 
 ### REQ-015 Token-per-percent estimate
@@ -123,8 +123,8 @@ Terms used below:
 - Type: functional · Origin: derived (needed by REQ-005 to REQ-007) · Status: draft
 
 ### REQ-022 Window reset detection
-- Statement: When the reset time of a window passes or a record carries a later reset time than the previous record, the cockpit shall start a new window period, so that values from different periods are never combined in one calculation.
-- Acceptance: A record series crossing a reset (used 95 % → 3 %, reset time moves forward by 5 h) produces two separate periods; rate, forecast and pace use only the new period; the history keeps both.
+- Statement: When the reset time of a window passes, or a record carries a reset time more than 10 minutes *(proposal)* later than the previous record of that window, the cockpit shall start a new window period, so that values from different periods are never combined in one calculation; smaller shifts of the reset time shall not start a new period.
+- Acceptance: A record series crossing a reset (used 95 % → 3 %, reset time moves forward by 5 h) produces two separate periods; rate, forecast and pace use only the new period; the history keeps both. A series whose reset time varies by up to 60 seconds between records stays one period.
 - Type: functional · Origin: derived · Status: draft
 
 ### REQ-023 Bridge setup and removal
@@ -158,7 +158,7 @@ Terms used below:
 - Type: functional · Origin: project description (raw data of source A) · Status: draft
 
 ### REQ-029 Compact and detailed view
-- Statement: The cockpit shall offer a compact view with the pace state, usage and time to reset of both windows, and a detailed view with all metrics of REQ-003 to REQ-008, REQ-014, REQ-015, REQ-027 and REQ-028; the user shall switch between them with one action.
+- Statement: The cockpit shall offer a compact view with the pace state, usage and time to reset of both windows plus the data age and stale marker (REQ-009), and a detailed view with all metrics of REQ-003 to REQ-008, REQ-014, REQ-015, REQ-027 and REQ-028; the user shall switch between them with one action.
 - Acceptance: In the compact view both pace indicators are visible in a window of at most 320 × 120 logical pixels *(proposal)*; one click or key switches to the detailed view and back.
 - Type: functional · Origin: brief (small window, all statistics) · Status: draft
 
@@ -168,8 +168,8 @@ Terms used below:
 - Type: functional · Origin: brief ("graphical visualisation") · Status: draft
 
 ### REQ-031 Logging
-- Statement: The cockpit and the bridge shall write a log file in the per-user data directory with timestamps and severity, limited to 5 MB *(proposal)* by rotation, and shall never write credentials or full record contents beyond the fields they use.
-- Acceptance: Triggering a malformed record produces a log line with time and severity; after 6 MB of log output the active log file is below 5 MB; a search of the log for "token", "key" and "authorization" values finds none.
+- Statement: The cockpit and the bridge shall write a log file in the per-user data directory with timestamps and severity, limited to 5 MB *(proposal)* by rotation, shall record the Claude Code version delivered with a record when it changes, and shall never write credentials or record fields they do not use.
+- Acceptance: Triggering a malformed record produces a log line with time and severity; after 6 MB of log output the active log file is below 5 MB; a change of the delivered Claude Code version produces one log line; with seeded fake credential strings in the environment and in an unused record field, a search of all log files finds none of them.
 - Type: functional · Origin: derived (REQ-104, REQ-108) · Status: draft
 
 ### REQ-032 Version information
@@ -185,7 +185,7 @@ Terms used below:
 ## Non-functional requirements
 
 ### REQ-101 Single executable
-- Statement: The cockpit shall be delivered as one executable file per platform that runs without an installer and without requiring a separately installed runtime.
+- Statement: The cockpit, including the bridge, shall be delivered as one executable file per platform that runs without an installer and without requiring a separately installed runtime.
 - Acceptance: On a clean machine of each target platform, copying the single file and starting it shows the cockpit window.
 - Type: non-functional (delivery) · Origin: brief · Status: draft
 
@@ -225,8 +225,8 @@ Terms used below:
 - Type: non-functional (reliability) · Origin: research · Status: draft
 
 ### REQ-109 Bridge speed and fallback output
-- Statement: The bridge shall finish within 100 ms *(proposal)* on the reference platforms and shall always print a status line text, also when the record is malformed or the data directory is not writable.
-- Acceptance: Median run time over 100 calls is below 100 ms on each target platform; with a malformed record or a read-only data directory the bridge still prints a text and exits with code 0.
+- Statement: The bridge's own processing shall finish within 100 ms *(proposal)* on the reference platforms, and the bridge shall always print a status line text, also when the record is malformed or the data directory is not writable. Where a previous user status line command is kept (REQ-012), the bridge shall store the record before running that command, give it at most 1 second *(proposal)*, and print its own text if the command fails or times out.
+- Acceptance: Median run time over 100 calls without a kept user command is below 100 ms on each target platform; with a malformed record or a read-only data directory the bridge still prints a text and exits with code 0; with a kept command that sleeps 5 s the record is stored and the bridge exits after at most about 1 s with its own text.
 - Type: non-functional (performance, reliability) · Origin: research (Claude Code cancels slow status line commands) · Status: draft
 
 ### REQ-110 Automated tests
@@ -240,7 +240,7 @@ Terms used below:
 - Type: non-functional (delivery) · Origin: brief · Status: draft
 
 ### REQ-112 User documentation
-- Statement: The repository shall contain user documentation covering download and start per platform, bridge setup and removal, data and configuration locations, the meaning of every displayed value, uninstalling, and troubleshooting.
+- Statement: The repository shall contain user documentation covering download and start per platform, bridge setup and removal, data and configuration locations, the meaning of every displayed value, known limitations (no data without a running Claude Code session, usage on other computers is not visible, no support for API-key billing), uninstalling, and troubleshooting.
 - Acceptance: A person who has not seen the project can set up and remove the bridge on one platform using only the documentation.
 - Type: non-functional (usability) · Origin: derived · Status: draft
 
@@ -250,7 +250,7 @@ Terms used below:
 - Type: non-functional (usability) · Origin: derived · Status: draft
 
 ### REQ-114 Colour-independent states
-- Statement: All states (pace, stale, no data, binding limit) shall be distinguishable without colour, and the colours used shall remain distinguishable with common colour-vision deficiencies.
+- Statement: Extending REQ-003 to every state, all states (pace, stale, no data, binding limit) shall be distinguishable without colour, and the colours used shall remain distinguishable with common colour-vision deficiencies.
 - Acceptance: A greyscale screenshot still shows every state; a check with a colour-blindness simulator (deuteranopia, protanopia) shows distinct states.
 - Type: non-functional (accessibility) · Origin: derived (REQ-003, REQ-106) · Status: draft
 
