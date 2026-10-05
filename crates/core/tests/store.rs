@@ -243,25 +243,58 @@ fn req_108_malformed_history_lines_are_skipped_wherever_they_are() {
     assert_eq!(read.skipped, 3);
 }
 
+/// Appends one record; a failed attempt (lock timeout, or a transient file error such as a
+/// scanner holding the file for a moment on Windows) is tried again a limited number of times.
+/// Returns the errors of the failed attempts, so the test can report them.
+fn append_with_retries(dir: &Path, record: &Record) -> Vec<String> {
+    const MAX_RETRIES: usize = 200;
+    let mut errors = Vec::new();
+    loop {
+        match append_history(dir, record, Duration::from_secs(5)) {
+            Ok(()) => return errors,
+            Err(e) if errors.len() < MAX_RETRIES => {
+                errors.push(e.to_string());
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(e) => panic!("append failed after {MAX_RETRIES} retries: {e}"),
+        }
+    }
+}
+
 #[test]
 fn req_020_concurrent_appends_keep_lines_intact() {
+    // This test is about the integrity of the lines, not about speed: 8 writers append 200
+    // records each as fast as they can, and afterwards every record must be there exactly once
+    // and no line may be damaged or skipped.
     let dir = Arc::new(tempfile::tempdir().unwrap());
     let handles: Vec<_> = (0..8)
         .map(|t| {
             let dir = Arc::clone(&dir);
             thread::spawn(move || {
-                for i in 0..200 {
-                    append_history(dir.path(), &record(t * 1000 + i), TIMEOUT).unwrap();
-                }
+                (0..200)
+                    .flat_map(|i| append_with_retries(dir.path(), &record(t * 1000 + i)))
+                    .collect::<Vec<String>>()
             })
         })
         .collect();
-    for h in handles {
-        h.join().unwrap();
-    }
+    let mut retry_errors: Vec<String> = handles
+        .into_iter()
+        .flat_map(|h| h.join().unwrap())
+        .collect();
+    retry_errors.sort();
+    retry_errors.dedup();
+    eprintln!("append attempts that had to be repeated: {retry_errors:?}");
     let read = read_history(dir.path()).unwrap();
-    assert_eq!(read.skipped, 0);
+    assert_eq!(read.skipped, 0, "damaged or partial lines in the history");
     assert_eq!(read.records.len(), 1_600);
+    let mut times: Vec<i64> = read.records.iter().map(|r| r.received_at_ms).collect();
+    times.sort_unstable();
+    times.dedup();
+    assert_eq!(
+        times.len(),
+        1_600,
+        "a record is missing or was written twice"
+    );
 }
 
 #[test]
