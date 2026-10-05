@@ -1,7 +1,7 @@
 # 0002 Technology: Rust with egui/eframe
 
 - Date: 2026-10-05
-- Status: proposed (awaiting owner confirmation)
+- Status: accepted (confirmed by the owner on 2026-10-05)
 
 ## Context
 
@@ -19,7 +19,7 @@ The cockpit must be one executable per platform without an installer or a separa
 | Bridge start time (REQ-109) | milliseconds | milliseconds | tens of milliseconds | n/a (separate binary needed) | milliseconds |
 | Testability, agent-friendliness | `cargo test`, `clippy`, `rustfmt` built in; strict compiler catches errors early | good | good | split Rust/web stack | manual build system, no standard test runner, memory safety by discipline |
 
-## Decision (proposed)
+## Decision
 
 **Rust with egui/eframe**, one executable with two modes:
 
