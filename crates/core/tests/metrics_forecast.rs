@@ -132,3 +132,19 @@ fn req_007_nothing_left_to_use_recommends_zero() {
     assert_close(recommended_rate(100.0, NOW + HOUR, NOW).unwrap(), 0.0);
     assert_close(recommended_rate(130.0, NOW + HOUR, NOW).unwrap(), 0.0);
 }
+
+#[test]
+fn req_005_a_rate_that_is_not_finite_is_not_available() {
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert_eq!(
+            forecast(40.0, NOW + HOUR, Some(bad), NOW),
+            Forecast::NotAvailable,
+            "{bad}"
+        );
+        assert_eq!(
+            unused_at_reset(40.0, NOW + HOUR, Some(bad), NOW),
+            None,
+            "{bad}"
+        );
+    }
+}

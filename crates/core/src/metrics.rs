@@ -137,7 +137,8 @@ pub fn forecast(used: f64, resets_at: i64, rate: Option<f64>, now_s: i64) -> For
     if used >= 100.0 {
         return Forecast::LimitReached;
     }
-    let Some(rate) = rate else {
+    // A rate that is not a finite number cannot be forecast from.
+    let Some(rate) = rate.filter(|r| r.is_finite()) else {
         return Forecast::NotAvailable;
     };
     if rate <= 0.0 {
@@ -156,7 +157,7 @@ pub fn forecast(used: f64, resets_at: i64, rate: Option<f64>, now_s: i64) -> For
 /// continued (concept §7.5, REQ-006). `None` without a rate.
 pub fn unused_at_reset(used: f64, resets_at: i64, rate: Option<f64>, now_s: i64) -> Option<f64> {
     let used = used.clamp(0.0, 100.0);
-    let rate = rate?;
+    let rate = rate.filter(|r| r.is_finite())?;
     let hours_left = (resets_at - now_s).max(0) as f64 / 3600.0;
     Some((100.0 - (used + rate * hours_left)).max(0.0))
 }
