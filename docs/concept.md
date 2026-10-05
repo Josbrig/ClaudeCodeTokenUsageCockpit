@@ -19,7 +19,7 @@ Claude Code ──stdin JSON──▶ usage-cockpit bridge ──▶ data direct
 
 ## 2. Repository layout
 
-Cargo workspace, Rust edition 2024, stable toolchain pinned in `rust-toolchain.toml`.
+Cargo workspace, Rust edition 2024, stable toolchain pinned in `rust-toolchain.toml` (at least Rust 1.89, needed for `std::fs::File::try_lock`). The executable name is `usage-cockpit`; ADR 0002 uses the working name `cockpit` for the same thing.
 
 ```
 Cargo.toml                     workspace: members = ["crates/core", "crates/app"]
@@ -58,7 +58,7 @@ docs/user-guide.md             REQ-112
 
 Every source file starts with `// SPDX-License-Identifier: Apache-2.0` and no copyright line until the owner has decided the author line format.
 
-**Dependencies (initial set, all MIT and/or Apache-2.0 unless noted):** `serde`, `serde_json` (feature `preserve_order`), `toml`, `directories`, `clap` (derive), `log`, `chrono` (features `clock`), `eframe`, `egui`, `egui_plot`, `anyhow` (app only), `thiserror` (core), dev: `assert_cmd`, `predicates`, `tempfile`. New dependencies need a reason in the PR and must pass `cargo deny check licenses`.
+**Dependencies (initial set, all MIT and/or Apache-2.0 unless noted):** `serde`, `serde_json` (feature `preserve_order`), `toml`, `directories`, `clap` (derive), `log`, `chrono` (feature `clock`), `eframe`, `egui`, `egui_plot`, `winit` (same version as used by `eframe`, feature `x11`, for the X11 backend selection), `windows-sys` (Windows only, `Win32_System_Console`), `anyhow` (app only), `thiserror` (core), dev: `assert_cmd`, `predicates`, `tempfile`, `chrono-tz`. New dependencies need a reason in the PR and must pass `cargo deny check licenses`.
 
 ## 3. Command line
 
@@ -71,6 +71,8 @@ Every source file starts with `// SPDX-License-Identifier: Apache-2.0` and no co
 | `usage-cockpit --version` | prints `usage-cockpit <version> (<commit>)`, exit 0 | REQ-032 |
 
 Parsing with `clap`. Exit codes: 0 success; 1 user declined or invalid use; 2 error. The bridge always exits 0.
+
+On Windows, `setup-bridge` and `remove-bridge` from the command line require `--yes`: after `AttachConsole` the program shares the console input with the parent shell, so an interactive `[y/N]` prompt is unreliable there. Without `--yes` they print `On Windows use --yes, or set up the bridge from the cockpit window.` and exit 1. On macOS and Linux the prompt is used.
 
 Windows: the binary uses `#![windows_subsystem = "windows"]`. For `--version`, `setup-bridge` and `remove-bridge` the program calls `AttachConsole(ATTACH_PARENT_PROCESS)` (crate `windows-sys`) before printing. Bridge mode writes to the inherited standard output pipe and needs no console.
 
@@ -125,24 +127,29 @@ Environment variable `USAGE_COCKPIT_HOME` overrides both (data in `<home>/data`,
 
 | File | Format | Written by | REQ |
 |---|---|---|---|
-| `latest.json` | one JSON object `{"v":1, "record":{...}}` | bridge, atomically (write `latest.json.tmp`, then rename) | REQ-020 |
+| `latest.json` | one JSON object `{"v":1, "record":{...}}` | bridge, atomically: write a uniquely named temp file `latest.json.<pid>.<nanos>.tmp`, then rename onto `latest.json` | REQ-020 |
+| `last_error.json` | `{"v":1, "received_at_ms":..., "kind":"malformed"}` | bridge, atomically, when input could not be parsed | REQ-108 |
 | `history-v1.jsonl` | one JSON object per line `{"v":1, ...record fields}` | bridge, append under lock | REQ-013 |
 | `history.lock` | empty lock file | bridge and cockpit, exclusive lock while appending or pruning | REQ-020 |
 | `cockpit.lock` | empty lock file | cockpit, held while running | REQ-033 |
-| `log.txt`, `log.1.txt` | text log | both | REQ-031 |
+| `log.txt`, `log.1.txt`, `log.lock` | text log; rotation only while holding `log.lock` (`try_lock`; if taken, skip rotating this time) | both | REQ-031 |
 
 Record field names in JSON: `received_at_ms`, `session_id`, `cc_version`, `five_hour` / `seven_day` as `{"used_pct":..,"resets_at":..}` or absent, `model`, `context_used_pct`, `cost_usd`. Every file carries `"v"` (REQ-115). Readers accept every `v` they know and skip lines with an unknown `v` (logged once).
 
-Locking uses `std::fs::File::lock` / `try_lock` (stable Rust). Reading `history-v1.jsonl` needs no lock: a reader ignores a last line without a trailing newline.
+Locking uses `std::fs::File::try_lock` in a retry loop (sleep 10 ms) until the timeout.
+
+- **Rename on Windows:** `std::fs::rename` replaces an existing target; if it fails with `PermissionDenied` (target briefly open by a reader), retry up to 5 times with 20 ms pauses, then give up and log. The cockpit deletes leftover `*.tmp` files older than one minute at start.
+- **Appending:** a bridge that Claude Code killed may have left a partial last line. Before appending, the writer checks the last byte of the file and writes a `\n` first if it is not a newline.
+- **Reading:** readers need no lock. They skip every line that does not parse (a partial line can therefore also sit in the middle of the file) and log the number of skipped lines once.
 
 ### 5.3 Bridge mode
 
 Steps, in this order:
 
 1. Read standard input completely (limit 1 MiB).
-2. Parse (§4.1). On success write `latest.json` atomically and append one history line under `history.lock` (lock wait at most 200 ms, then skip the append and log).
-3. If a previous status line command is stored in the settings (§5.4), run it through the same shell kind Claude Code would use (§5.5) with the original input on its standard input, timeout 1 s *(proposal)*; if it exits 0 within the timeout, print its standard output unchanged and exit.
-4. Otherwise print the bridge's own text: `5h 23% · 7d 41%`, with `–` for a missing window; with a parse error print `usage-cockpit: no data`.
+2. Parse (§4.1). On success: read the previous `latest.json` to compare `cc_version` (log one line if it changed), write `latest.json` atomically, append one history line under `history.lock` (lock wait at most 200 ms, then skip the append and log). On a parse error: write `last_error.json` and log one line without the input.
+3. If a previous status line command is stored in `bridge-state.json` (§5.4), run it through the same shell kind Claude Code would use (§5.5) with the original input on its standard input, timeout 1 s *(proposal)*; if it exits 0 within the timeout, print its standard output unchanged and exit.
+4. Otherwise print the bridge's own text: `5h 23.5% · 7d 41.2%`, with `–` for a missing window; with a parse error print `usage-cockpit: no data`.
 5. Exit 0 in every case (REQ-109). All errors go to the log only.
 
 Speed: steps 1, 2 and 4 must take under 100 ms (REQ-109); the bridge does not initialise any GUI code.
@@ -151,26 +158,32 @@ Speed: steps 1, 2 and 4 must take under 100 ms (REQ-109); the bridge does not in
 
 Claude Code settings file: `~/.claude/settings.json` (Windows: `%USERPROFILE%\.claude\settings.json`); `CLAUDE_CONFIG_DIR` overrides `~/.claude` if set.
 
+The replaced status line is kept in `<config dir>/bridge-state.json` (`{"v":1, "previous_status_line": <object or null>}`), written atomically and **only** by setup and removal, never by the cockpit window, so a running cockpit cannot overwrite it.
+
 `setup-bridge`:
 
 1. Determine the absolute path of the running executable. Convert to forward slashes on Windows. If the path contains a space, stop with a message asking the user to place the executable in a folder without spaces (both Git Bash and PowerShell then accept the unquoted path).
 2. Show what will change and ask `Change Claude Code settings? [y/N]` (skipped with `--yes`; the GUI shows the same text in a dialog). Declining leaves the file byte-identical, exit 1.
-3. Copy the settings file to `settings.json.usage-cockpit-backup-<YYYYMMDD-HHMMSS>`.
-4. If a `statusLine` object exists and is not already the bridge, store it as JSON text in the cockpit settings (`bridge.previous_status_line`).
+3. If the settings file exists, copy it to `settings.json.usage-cockpit-backup-<YYYYMMDD-HHMMSS>`.
+4. If a `statusLine` object exists and is not already the bridge, store it in `bridge-state.json`.
 5. Set `statusLine` to `{"type":"command","command":"<path> bridge"}`; keep all other keys and their order (`serde_json` with `preserve_order`); write atomically.
 6. If the file does not exist, create it with only the `statusLine` key.
 
-`remove-bridge`: after consent, restore `statusLine` from `bridge.previous_status_line` or remove the key if there was none; clear the stored value; backup first, write atomically. If the current `statusLine` is not the bridge, change nothing and say so.
+`remove-bridge`: after consent, restore `statusLine` from `bridge-state.json` or remove the key if there was none; set the stored value to `null`; backup first, write atomically. If the current `statusLine` is not the bridge, change nothing and say so.
+
+The user guide notes that a `statusLine` in project-level Claude Code settings takes precedence over the user-level one, so the bridge does not run in such projects.
 
 ### 5.5 Running the kept user command
 
-Unix: `sh -c <command>`. Windows: `bash -c <command>` when `bash.exe` from Git for Windows is found (on `PATH` or in `%ProgramFiles%\Git\bin`), else `powershell -NoProfile -Command <command>` (mirrors Claude Code's behaviour).
+Unix: `sh -c <command>`. Windows: Git for Windows bash, searched in this order: `CLAUDE_CODE_GIT_BASH_PATH` if set; `%ProgramFiles%\Git\bin\bash.exe`; `%ProgramFiles(x86)%\Git\bin\bash.exe`; `%LOCALAPPDATA%\Programs\Git\bin\bash.exe`; `<directory of git.exe found on PATH>\..\bin\bash.exe`. Never use a `bash.exe` from `C:\Windows\System32` (that is WSL). If none is found: `powershell -NoProfile -Command <command>` (mirrors Claude Code's behaviour).
+
+Running with timeout (std has no wait-with-timeout): spawn with piped stdin and stdout; write the input from a separate thread and close stdin; read stdout in another thread that sends the result over a channel; poll `try_wait` every 10 ms until the deadline; on timeout `kill` the child and use the fallback text without waiting for the reader thread (a grandchild may keep the pipe open).
 
 ## 6. Periods (REQ-022)
 
 For each window kind, records are grouped into periods in received order:
 
-- A record continues the current period if its `resets_at` is at most 600 s *(proposal)* later than the period's last `resets_at` **and** `received_at` is before the period's last `resets_at`.
+- A record continues the current period if `|resets_at − period's last resets_at| ≤ 600` s *(proposal)* **and** its receive time is before the period's last `resets_at`. Receive times are converted with `received_at_ms.div_euclid(1000)` before comparing with `resets_at`.
 - Otherwise it starts a new period.
 - A period's reset time is the `resets_at` of its latest record.
 
@@ -178,7 +191,7 @@ The **current period** is the latest period whose reset time is in the future. I
 
 ## 7. Formulas
 
-Notation for one window: `u` used %, `R` reset time (s), `L` window length (s), `now` (s), `tol` tolerance band in percentage points (default 5), `P` rate period (default 1,800 s).
+Notation for one window: `u` used %, clamped to 0…100 in every calculation, `R` reset time (s), `L` window length (s), `now` (s), `tol` tolerance band in percentage points (default 5), `P` rate period (default 1,800 s).
 
 ### 7.1 Basic values (REQ-001, REQ-002)
 
@@ -202,11 +215,11 @@ Check: (10:00, 40), (10:15, 45), (10:30, 50) → r = 20 %/h.
 
 ### 7.4 Exhaustion forecast (REQ-005)
 
-If `r` available and `r > 0`: `T100 = now + (100 − u) / r · 3600`; "limit first" if `T100 < R`, else "reset first". If `r = 0`: "reset first". Check: u = 40, r = 20 → 3 h.
+In this order: `u ≥ 100` → "limit reached"; `r` not available → "not available"; `r = 0` → "reset first"; otherwise `T100 = now + (100 − u) / r · 3600` and "limit first" if `T100 < R`, else "reset first". Check: u = 40, r = 20 → 3 h.
 
 ### 7.5 Projected unused remainder (REQ-006)
 
-If `r` available: `max(0, 100 − (u + r · (R − now) / 3600))`. Check: 40 + 5·4 = 60 → 40 %.
+If `r` available: `max(0, 100 − (u + r · max(0, R − now) / 3600))`. Check: 40 + 5·4 = 60 → 40 %.
 
 ### 7.6 Recommended rate (REQ-007)
 
@@ -214,19 +227,19 @@ If `R > now`: `(100 − u) / ((R − now) / 3600)` %/h, else undefined. Check: 4
 
 ### 7.7 Binding limit (REQ-008)
 
-For each window with "limit first", time to exhaustion `T100`. The binding limit is the window with the earlier `T100`; if neither reaches its limit before its reset, there is none. If only one window has data, there is no comparison.
+For each window with "limit first", time to exhaustion `T100`; a window with "limit reached" counts as exhausted now. The binding limit is the window with the earlier `T100`; if neither reaches its limit before its reset, there is none. If only one window has data, there is no comparison.
 
 ### 7.8 Weekly planning (REQ-027)
 
-With both windows: `n = ceil((R7 − now) / 18,000)`; share per window = `(100 − u7) / n` % of the weekly quota. Check: 50 h, 60 % remaining → n = 10, 6 %.
+With both windows and `R7 > now`: `n = (R7 − now).div_ceil(18_000)` in integer arithmetic; share per window = `(100 − u7) / n` % of the weekly quota. If `R7 ≤ now`, no plan. Check: 50 h, 60 % remaining → n = 10, 6 %.
 
 ### 7.9 Data age and stale (REQ-009)
 
-age = `now − received_at` of the latest record; stale if age > 600 s *(proposal, setting)*. The displayed values stay, marked stale (REQ-108).
+age = `now − received_at` of the latest record; stale if age > 600 s *(proposal, setting)*, **or** if `last_error.json` is newer than the latest record (a malformed record arrived; REQ-108 asks for the marker right away). The displayed values stay, marked stale.
 
 ### 7.10 Tokens per percentage point (REQ-015)
 
-For the current five-hour period: tokens from §8 with timestamps inside the period ÷ (`u` now − `u` of the first record of the period). Shown only if the denominator ≥ 1 pp and tokens > 0, always labelled "estimate".
+For the current five-hour period: tokens (input + output + cache creation + cache read) from §8 with timestamps from the receive time of the period's first record until now ÷ (`u` now − `u` of that first record). Shown only if the denominator ≥ 1 pp and tokens > 0, always labelled "estimate".
 
 ## 8. Transcript statistics (REQ-014)
 
@@ -241,7 +254,7 @@ Location: `<claude dir>/projects/**/*.jsonl` (claude dir as in §5.4). Format un
 
 ## 9. Settings (REQ-024)
 
-`config/settings.toml`:
+`<config dir>/settings.toml` (§5.1):
 
 ```toml
 version = 1
@@ -255,15 +268,15 @@ x = 100.0
 y = 100.0
 width = 320.0
 height = 120.0
-[bridge]
-previous_status_line = ""   # JSON text of the replaced statusLine object, empty if none
 ```
+
+The replaced Claude Code status line is not stored here but in `bridge-state.json` (§5.4).
 
 Missing file → defaults; invalid file → defaults, the invalid file is renamed to `settings.toml.invalid` and one log line is written. Values out of range (e.g. negative tolerance) fall back to the default for that key.
 
 ## 10. Logging (REQ-031)
 
-`log` facade with a small logger in `cockpit-core::logging`: line format `2026-10-05T14:03:22Z WARN bridge: <message>`; when `log.txt` exceeds 5 MB it is renamed to `log.1.txt` (replacing an older one). Logged: start, version, errors, malformed input (without content), settings fallbacks, setup/removal, changes of `cc_version`. Never logged: record contents beyond used fields, environment variables, settings file contents of Claude Code.
+`log` facade with a small logger in `cockpit-core::logging`: line format `2026-10-05T14:03:22Z WARN bridge: <message>`; when `log.txt` exceeds 5 MB it is renamed to `log.1.txt` (replacing an older one) while holding `log.lock`. Logged: start, version, errors, malformed input (without content), settings fallbacks, setup/removal, changes of `cc_version`. Never logged: record contents beyond used fields, environment variables, settings file contents of Claude Code.
 
 ## 11. User interface
 
@@ -285,8 +298,8 @@ Every state has glyph and text, so colour is never the only carrier. Both dark a
 Default size 320 × 120 logical px, always on top by default, no window decorations beyond the system title bar.
 
 ```
-5h ⚑ [██████████░░░░░░|░░░░░░░]  ▲ over   62%  1h 12m
-7d   [████░░░░|░░░░░░░░░░░░░░░]  ▼ under  21%  3d 4h
+5h ⚑ [██████████░░░░░░|░░░░░░░]  ▲ over   62.0%  1h 12m
+7d   [████░░░░|░░░░░░░░░░░░░░░]  ▼ under  21.0%  3d 4h
 updated 12 s ago                                   ⤢
 ```
 
@@ -300,9 +313,10 @@ Default 520 × 640 px, scrollable:
 1. Per window: used, remaining, reset (local time and countdown), target, deviation, pace factor, rate, forecast, projected unused remainder, recommended rate (§7).
 2. Binding limit and weekly planning (§7.7, §7.8).
 3. History chart per window (`egui_plot`): points of the current period, target line from (period start, 0 %) to (reset, 100 %), vertical line at now (REQ-030).
-4. Session details from the latest record: model, context usage, session cost (REQ-028).
-5. Transcript statistics: table per model, daily totals for the last 7 days, cache share, tokens per percentage point labelled "estimate" (REQ-014, REQ-015).
-6. Footer: version and commit, link to licence notices, buttons "Settings", "Set up bridge" / "Remove bridge", "Compact view".
+4. Session details from the latest record, under the heading "From Claude Code": model, context usage, session cost (REQ-028).
+5. Transcript statistics: table per model, daily totals for the retained history (up to 35 days, scrollable), cache share, tokens per percentage point labelled "estimate" (REQ-014, REQ-015).
+6. Previous periods: per window the last three finished periods with reset time and final used % (REQ-013).
+7. Footer: version and commit, link to licence notices, buttons "Settings", "Set up bridge" / "Remove bridge", "Compact view".
 
 Settings dialog: fields of §9 with validation; "Save" writes the file.
 
@@ -312,13 +326,13 @@ Settings dialog: fields of §9 with validation; "Save" writes the file.
 
 ### 11.5 Formatting
 
-- Percentages with one decimal below 10 %, otherwise whole numbers (`4.5%`, `62%`).
+- Percentages always with one decimal (`4.5%`, `23.5%`, `62.0%`), rounded half away from zero.
 - Durations: `< 1 h` → `42m`; `< 24 h` → `1h 12m`; otherwise `3d 4h`.
 - Local times via `chrono::Local`, format `Mon 14:30`; durations always from absolute timestamps (REQ-026).
 
 ### 11.6 Platform behaviour
 
-- **Single instance (REQ-033):** the cockpit takes `cockpit.lock` with `try_lock`; if taken, it prints/logs "usage-cockpit is already running" and exits 0.
+- **Single instance (REQ-033):** the cockpit takes `cockpit.lock` with `try_lock`; if taken, it logs the fact and shows a small window with the text "usage-cockpit is already running." and an OK button (a GUI application has no visible console), then exits 0.
 - **Linux:** if `DISPLAY` is set, the event loop is created with the X11 backend (`winit` `EventLoopBuilderExtX11::with_x11` through `eframe::NativeOptions::event_loop_builder`), so always-on-top and position restore work under XWayland; otherwise Wayland with the documented limitation.
 - **Scaling (REQ-113):** egui uses logical pixels and the system scale factor; no fixed-pixel images.
 - **Repaint:** `ctx.request_repaint_after(1 s)`; file polling every 500 ms on a background thread that sends new records over a channel.
