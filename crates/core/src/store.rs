@@ -335,3 +335,133 @@ pub fn append_history(
     file.write_all(&out)?;
     Ok(())
 }
+
+// ---- retention ------------------------------------------------------------------------
+
+/// How long records are kept: 35 days (REQ-025, a proposal of the requirements).
+pub const HISTORY_KEEP_DAYS: u32 = 35;
+/// Size at which the oldest lines are dropped: 50 MiB.
+pub const HISTORY_MAX_BYTES: u64 = 50 * 1024 * 1024;
+/// Size the history is cut down to once it exceeds the maximum: 45 MiB.
+pub const HISTORY_TARGET_BYTES: u64 = 45 * 1024 * 1024;
+/// How long pruning waits for the history lock.
+pub const PRUNE_LOCK_WAIT: Duration = Duration::from_secs(5);
+
+const MS_PER_DAY: i64 = 86_400_000;
+
+/// What a pruning run did, counted in history lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PruneStats {
+    /// Lines removed: too old, cut for size, or unreadable.
+    pub removed: usize,
+    /// Lines left in the history.
+    pub kept: usize,
+}
+
+/// Whether pruning keeps a history line.
+///
+/// Version 1 lines are kept if they are readable and not older than the cutoff. Lines of a
+/// format version this program does not know (written by a newer one) are never destroyed
+/// just because they are not understood: they go only if they carry a receive time that is
+/// older than the cutoff. Everything else (not JSON, no version) is damaged and goes.
+fn keep_line(line: &str, cutoff_ms: i64) -> bool {
+    let Ok(value) = serde_json::from_str::<Value>(line) else {
+        return false;
+    };
+    match format_version(&value) {
+        Some(1) => serde_json::from_value::<HistoryLineV1>(value)
+            .is_ok_and(|l| l.record.received_at_ms >= cutoff_ms),
+        Some(_) => value
+            .get("received_at_ms")
+            .and_then(Value::as_i64)
+            .is_none_or(|ms| ms >= cutoff_ms),
+        None => false,
+    }
+}
+
+/// Prunes the history with the default limits (35 days, 50 MiB cut down to 45 MiB).
+pub fn prune_history_default(dir: &Path, now_ms: i64) -> Result<PruneStats, StoreError> {
+    prune_history(
+        dir,
+        now_ms,
+        HISTORY_KEEP_DAYS,
+        HISTORY_MAX_BYTES,
+        HISTORY_TARGET_BYTES,
+    )
+}
+
+/// Prunes the history under `history.lock`, waiting at most [`PRUNE_LOCK_WAIT`] for it.
+///
+/// Removes records received more than `keep_days` before `now_ms` and damaged lines; lines of
+/// a newer format version are kept unless their receive time is too old. If the rest is still larger than `max_bytes`, the oldest lines (first in the file)
+/// are dropped until at most `target_bytes` are left. The file is rewritten (temp file, then
+/// rename) only if something was removed; appends wait for the lock meanwhile.
+pub fn prune_history(
+    dir: &Path,
+    now_ms: i64,
+    keep_days: u32,
+    max_bytes: u64,
+    target_bytes: u64,
+) -> Result<PruneStats, StoreError> {
+    prune_history_with_wait(
+        dir,
+        now_ms,
+        keep_days,
+        max_bytes,
+        target_bytes,
+        PRUNE_LOCK_WAIT,
+    )
+}
+
+/// Like [`prune_history`] with an explicit time to wait for the lock.
+pub fn prune_history_with_wait(
+    dir: &Path,
+    now_ms: i64,
+    keep_days: u32,
+    max_bytes: u64,
+    target_bytes: u64,
+    lock_wait: Duration,
+) -> Result<PruneStats, StoreError> {
+    let _lock = lock_history(dir, lock_wait)?;
+    let path = dir.join(HISTORY_FILE);
+    let Some(bytes) = read_bytes_if_exists(&path)? else {
+        return Ok(PruneStats::default());
+    };
+    let cutoff_ms = now_ms.saturating_sub(i64::from(keep_days) * MS_PER_DAY);
+    let text = String::from_utf8_lossy(&bytes);
+
+    let mut removed = 0usize;
+    let mut kept: Vec<&str> = Vec::new();
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        if keep_line(line, cutoff_ms) {
+            kept.push(line);
+        } else {
+            removed += 1;
+        }
+    }
+
+    // Too large: drop from the front (the oldest appended lines) down to the target size.
+    let mut total: u64 = kept.iter().map(|l| l.len() as u64 + 1).sum();
+    let mut dropped = 0usize;
+    if total > max_bytes {
+        while dropped < kept.len() && total > target_bytes {
+            total -= kept[dropped].len() as u64 + 1;
+            dropped += 1;
+        }
+    }
+    removed += dropped;
+    let kept = &kept[dropped..];
+
+    if removed > 0 {
+        let mut out = String::with_capacity(usize::try_from(total).unwrap_or(0));
+        for line in kept {
+            out.push_str(line);
+            out.push('\n');
+        }
+        write_atomic(&path, out.as_bytes())?;
+    }
+    Ok(PruneStats {
+        removed,
+        kept: kept.len(),
+    })
+}
