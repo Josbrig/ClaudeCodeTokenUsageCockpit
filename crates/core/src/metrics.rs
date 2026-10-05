@@ -169,3 +169,30 @@ pub fn recommended_rate(used: f64, resets_at: i64, now_s: i64) -> Option<f64> {
     let secs_left = resets_at - now_s;
     (secs_left > 0).then(|| (100.0 - used) / (secs_left as f64 / 3600.0))
 }
+
+/// The window whose limit would be reached first (concept §7.7, REQ-008).
+///
+/// A window that has already reached its limit counts as exhausted now, a window with
+/// `LimitFirst` as exhausted at its predicted time; a window where the reset comes first (or
+/// that has no forecast) is never exhausted. The earlier exhaustion binds; if both are
+/// exhausted at the same moment the 7-day window binds, because it holds you back longer.
+/// Without a forecast for both windows there is nothing to compare, and if neither window
+/// reaches its limit before its reset there is no binding limit.
+pub fn binding(five: Option<&Forecast>, seven: Option<&Forecast>) -> Option<WindowKind> {
+    fn exhausted_at(forecast: &Forecast) -> Option<i64> {
+        match forecast {
+            Forecast::LimitReached => Some(i64::MIN),
+            Forecast::LimitFirst { at_s } => Some(*at_s),
+            Forecast::ResetFirst | Forecast::NotAvailable => None,
+        }
+    }
+    let five_at = exhausted_at(five?);
+    let seven_at = exhausted_at(seven?);
+    match (five_at, seven_at) {
+        (Some(f), Some(s)) if f < s => Some(WindowKind::FiveHour),
+        (Some(_), Some(_)) => Some(WindowKind::SevenDay),
+        (Some(_), None) => Some(WindowKind::FiveHour),
+        (None, Some(_)) => Some(WindowKind::SevenDay),
+        (None, None) => None,
+    }
+}
