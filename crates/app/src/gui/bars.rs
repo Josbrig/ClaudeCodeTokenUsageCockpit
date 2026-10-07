@@ -13,6 +13,8 @@ use super::theme;
 
 /// Height of a chart in logical pixels.
 const HEIGHT: f32 = 150.0;
+/// Height of one model in the model chart.
+const ROW_HEIGHT: f32 = 24.0;
 /// About this many day labels are shown, so that they do not overlap.
 const LABELS: usize = 7;
 
@@ -114,6 +116,73 @@ pub fn days(ui: &mut Ui, id: &str, days: &[(String, [u64; 4])], kind: Kind) {
         .show(ui, |plot_ui| {
             plot_ui.bar_chart(BarChart::new(kind.label(), bars).color(theme::UNDER));
         });
+}
+
+/// Draws horizontal bars, one per model, in the order of the table (the first model on top).
+pub fn models(ui: &mut Ui, id: &str, models: &[(String, [u64; 4])], kind: Kind) {
+    let count = models.len();
+    // The first row of the table is the top bar, which is the highest position.
+    let bars: Vec<Bar> = models
+        .iter()
+        .enumerate()
+        .map(|(row, (model, tokens))| {
+            Bar::new((count - 1 - row) as f64, tokens[kind.index()] as f64)
+                .width(0.7)
+                .name(model.as_str())
+        })
+        .collect();
+    let names: Vec<String> = models
+        .iter()
+        .rev()
+        .map(|(model, _)| model.clone())
+        .collect();
+    ui.label(RichText::new(format!("{} tokens per model", kind.label())).strong());
+    Plot::new(id)
+        .height(model_chart_height(count))
+        .allow_zoom(false)
+        .allow_drag(false)
+        .allow_scroll(false)
+        .allow_boxed_zoom(false)
+        .allow_double_click_reset(false)
+        .include_y(-0.6)
+        .include_y(count as f64 - 0.4)
+        .include_x(0.0)
+        // Without this a chart of only zeros would get an axis from -17 to 17.
+        .include_x(1.0)
+        .y_grid_spacer(move |_: GridInput| row_marks(count))
+        .custom_y_axes(vec![AxisHints::new_y().formatter(
+            move |mark: GridMark, _range: &RangeInclusive<f64>| {
+                let position = mark.value.round();
+                if (mark.value - position).abs() < 1e-6 && position >= 0.0 {
+                    names.get(position as usize).cloned().unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            },
+        )])
+        .x_axis_formatter(|mark: GridMark, _range: &RangeInclusive<f64>| y_label(mark.value))
+        .show(ui, |plot_ui| {
+            plot_ui.bar_chart(
+                BarChart::new(kind.label(), bars)
+                    .horizontal()
+                    .color(theme::UNDER),
+            );
+        });
+}
+
+/// Height of the model chart: a row per model and room for the axis.
+pub fn model_chart_height(count: usize) -> f32 {
+    (count as f32 * ROW_HEIGHT + 40.0).clamp(80.0, 320.0)
+}
+
+/// One mark per model.
+pub fn row_marks(count: usize) -> Vec<GridMark> {
+    (0..count)
+        .map(|position| GridMark {
+            value: position as f64,
+            step_size: 1.0,
+        })
+        .collect()
 }
 
 /// `2026-10-08` as `10-08`; text that is not a date is shown as it is.
@@ -255,6 +324,17 @@ mod tests {
         assert_eq!(positions(3, 1), [0, 1, 2]);
         assert_eq!(positions(1, 1), [0]);
         assert!(day_marks(0, 1).is_empty());
+    }
+
+    #[test]
+    fn req_014_the_model_chart_has_a_row_per_model() {
+        assert_eq!(model_chart_height(0), 80.0);
+        assert_eq!(model_chart_height(1), 80.0);
+        assert_eq!(model_chart_height(7), 7.0 * ROW_HEIGHT + 40.0);
+        assert_eq!(model_chart_height(100), 320.0);
+        let positions: Vec<usize> = row_marks(3).iter().map(|m| m.value as usize).collect();
+        assert_eq!(positions, [0, 1, 2]);
+        assert!(row_marks(0).is_empty());
     }
 
     #[test]

@@ -197,6 +197,9 @@ pub struct TranscriptView {
     pub available: bool,
     /// Totals per model, in the order of the model names.
     pub per_model: Vec<(String, UsageText)>,
+    /// The same models in the same order as numbers, in the order of [`TOKEN_KINDS`]. For the
+    /// chart.
+    pub per_model_numbers: Vec<(String, [u64; 4])>,
     /// Totals per local day as `YYYY-MM-DD`, newest first, at most [`MAX_TRANSCRIPT_DAYS`].
     pub per_day: Vec<(String, UsageText)>,
     /// The same days in the same order as numbers, in the order of [`TOKEN_KINDS`]: input,
@@ -211,6 +214,7 @@ impl Default for TranscriptView {
         Self {
             available: false,
             per_model: Vec::new(),
+            per_model_numbers: Vec::new(),
             per_day: Vec::new(),
             per_day_numbers: Vec::new(),
             cache_share_text: TRANSCRIPTS_NOT_AVAILABLE.to_owned(),
@@ -340,6 +344,21 @@ fn transcripts(stats: Option<&Stats>) -> TranscriptView {
             .per_model
             .iter()
             .map(|(model, usage)| (model.clone(), UsageText::from(usage)))
+            .collect(),
+        per_model_numbers: stats
+            .per_model
+            .iter()
+            .map(|(model, usage)| {
+                (
+                    model.clone(),
+                    [
+                        usage.input,
+                        usage.output,
+                        usage.cache_creation,
+                        usage.cache_read,
+                    ],
+                )
+            })
             .collect(),
         per_day: stats
             .per_day

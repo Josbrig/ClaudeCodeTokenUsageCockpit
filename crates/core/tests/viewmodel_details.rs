@@ -196,10 +196,44 @@ fn req_014_chart_numbers_match_the_table() {
 }
 
 #[test]
+fn req_014_model_chart_numbers_match_the_table() {
+    let entries = [
+        entry(NOW_MS, "model-b", tokens(1_000, 2_000, 30, 40)),
+        entry(NOW_MS + 1, "model-a", tokens(1_234_567, 5, 100, 300)),
+        entry(NOW_MS + 2, "model-a", tokens(1, 1, 0, 0)),
+    ];
+    let stats = aggregate(&entries, &Utc);
+    let t = view(&[], Some(&stats)).transcripts;
+    assert_eq!(t.per_model_numbers.len(), t.per_model.len());
+    for ((table_model, text), (chart_model, numbers)) in
+        t.per_model.iter().zip(&t.per_model_numbers)
+    {
+        assert_eq!(table_model, chart_model, "same models in the same order");
+        let shown = [
+            &text.input,
+            &text.output,
+            &text.cache_creation,
+            &text.cache_read,
+        ];
+        for (text, number) in shown.iter().zip(numbers) {
+            assert_eq!(text.replace(',', ""), number.to_string(), "{table_model}");
+        }
+    }
+    assert_eq!(
+        t.per_model_numbers,
+        [
+            ("model-a".to_owned(), [1_234_568, 6, 100, 300]),
+            ("model-b".to_owned(), [1_000, 2_000, 30, 40]),
+        ]
+    );
+}
+
+#[test]
 fn req_014_no_chart_numbers_without_statistics() {
     for stats in [None, Some(Stats::default())] {
         let vm = view(&[], stats.as_ref());
         assert!(vm.transcripts.per_day_numbers.is_empty());
+        assert!(vm.transcripts.per_model_numbers.is_empty());
     }
 }
 
