@@ -167,6 +167,8 @@ struct Cockpit {
     bridge_dialog: Option<bridge_view::Dialog>,
     /// The files of the open bridge dialog, found when it was opened.
     bridge_paths: Option<bridge_view::Paths>,
+    /// Whether the line "window ready" was written (once, after the first frame).
+    ready_logged: bool,
     /// Whether the window is on top at the moment, as far as this program has set it.
     on_top: bool,
 }
@@ -191,6 +193,7 @@ impl Cockpit {
             dialog: None,
             bridge_dialog: None,
             bridge_paths: None,
+            ready_logged: false,
         }
     }
 
@@ -411,6 +414,11 @@ impl eframe::App for Cockpit {
         self.show_dialog(ctx);
         self.show_bridge_dialog(ctx);
         self.track_window(ctx);
+        if !self.ready_logged {
+            // The first frame is drawn: the start-up measurement waits for this line.
+            self.ready_logged = true;
+            log::info!("window ready");
+        }
         ctx.request_repaint_after(REPAINT_EVERY);
     }
 
