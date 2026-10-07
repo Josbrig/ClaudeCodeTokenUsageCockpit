@@ -34,6 +34,8 @@ pub struct Action {
     pub setup_bridge: bool,
     /// The button "Remove bridge" was used.
     pub remove_bridge: bool,
+    /// The button "Remove everything" was used.
+    pub remove_everything: bool,
 }
 
 /// Version and commit as shown in the footer, for example `0.1.0 (a1b2c3d)`.
@@ -251,7 +253,7 @@ fn footer(ui: &mut Ui, action: &mut Action) {
         ui.label(format!("usage-cockpit {}", version_text()));
         ui.hyperlink_to("Licence notices", LICENCE_NOTICES_URL);
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.button("Settings").clicked() {
             action.open_settings = true;
         }
@@ -260,6 +262,9 @@ fn footer(ui: &mut Ui, action: &mut Action) {
         }
         if ui.button("Remove bridge").clicked() {
             action.remove_bridge = true;
+        }
+        if ui.button("Remove everything").clicked() {
+            action.remove_everything = true;
         }
         if ui.button("Compact view (D)").clicked() {
             action.switch_view = true;

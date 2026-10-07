@@ -83,7 +83,7 @@ The detailed view also has these parts:
 - **Context used** is how full the context window of the session is; **Session cost** is the cost of the session in US dollars as Claude Code estimates it. Both come from the newest record and read *no data* when Claude Code did not send them.
 - **This window's limit binds first.** appears under the state of the window that is the binding limit.
 - **Transcript tables.** *Per model* and *Per day* (newest first, up to 35 days) list for each model or day the tokens in four columns: **Input** (input tokens that were not served from the cache), **Output**, **Cache write** (input tokens written to the cache) and **Cache read** (input tokens read from the cache). **Cache share** is (cache write + cache read) divided by (input + cache write + cache read) over everything listed; its formula is in [docs/concept.md](concept.md), section 8. The line *transcript statistics not available* means that no transcript file could be read.
-- **Footer.** The version and commit of the program (the same as `usage-cockpit --version`), a link *Licence notices* to the licences of the components used, and the buttons *Settings*, *Set up bridge*, *Remove bridge* and *Compact view (D)*.
+- **Footer.** The version and commit of the program (the same as `usage-cockpit --version`), a link *Licence notices* to the licences of the components used, and the buttons *Settings*, *Set up bridge*, *Remove bridge*, *Remove everything* (see *Uninstall*) and *Compact view (D)*.
 
 The exact formulas of sections up to *Previous periods* are in [docs/concept.md](concept.md), section 7; the transcript statistics are described in section 8.
 
@@ -104,9 +104,18 @@ The exact formulas of sections up to *Previous periods* are in [docs/concept.md]
 
 ## Uninstall
 
-1. Untick *Start with Windows* in the settings if you had switched it on (Windows). Remove the bridge (see above) so that Claude Code no longer calls the cockpit. Your backup files stay next to `settings.json`; delete them if you do not need them.
-2. Close the cockpit and delete the program file.
-3. Delete the data and configuration folders from the table above if you want to remove everything.
+The program is portable: it installs nothing, so removing it is deleting its file. Before you do, let it undo what it did outside its own file:
+
+1. **Press *Remove everything*** at the bottom of the detailed view (or run `usage-cockpit uninstall`, with `--yes` on Windows). The dialog lists what will happen before it happens:
+   - the bridge is removed from the Claude Code settings (a backup is made first, your previous status line comes back);
+   - the start entry of the system is removed, if you had switched *Start with Windows* on;
+   - **only if you tick the box** *Also delete the history, logs and settings*: the data and configuration folders from the table above are deleted. The history is lost then. On the command line this is the option `--remove-data`.
+2. **Press OK.** The cockpit closes itself. If you chose to delete the data, a small hidden helper of the same program waits until the window has closed and then deletes the folders.
+3. **Delete the program file by hand.** The program cannot delete itself.
+
+What stays: the copies of your Claude Code settings (`settings.json.usage-cockpit-backup-*`) next to `settings.json`, and any file in the data or configuration folder that the cockpit did not create (the folders are cleaned file by file and only removed when they are empty). If something in the list could not be done, the cockpit stays open and says what failed; the history and settings are then kept, because the stored status line is needed to put your old one back.
+
+By hand, the same is: remove the bridge (see above), untick *Start with Windows*, close the cockpit, delete the folders of the table above, delete the program file.
 
 ## Troubleshooting
 

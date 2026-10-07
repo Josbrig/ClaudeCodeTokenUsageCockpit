@@ -10,6 +10,7 @@ mod gui;
 mod instance;
 mod setup;
 mod shell;
+mod uninstall;
 
 use std::process::ExitCode;
 
@@ -39,6 +40,12 @@ fn main() -> ExitCode {
             console::attach_to_parent();
             commands::remove_bridge(yes)
         }
+        Some(Command::Uninstall { yes, remove_data }) => {
+            console::attach_to_parent();
+            commands::uninstall(yes, remove_data)
+        }
+        // Started by the window, without a console and without output.
+        Some(Command::FinishUninstall { after }) => commands::finish_uninstall(after),
     }
 }
 

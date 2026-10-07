@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Windows x64 executable no longer imports the Visual C++ runtime (the C runtime is linked in; not yet tried on a clean Windows); the bridge starts faster (median 66 ms instead of 101 ms on the development machine).
 
 ### Added
+- *Remove everything* (button in the detailed view, `usage-cockpit uninstall [--yes] [--remove-data]`): undoes the bridge entry, the start entry and, on request, the data and configuration folders, so that the portable program can be deleted without leftovers.
 - Windows: the settings dialog has a switch *Start with Windows* (off by default, per user, no administrator rights) that shows the real state of the entry.
 - Project brief, project description, research note on data sources and first draft of the requirements.
 - Repository setup: issue forms, pull request template, CI check, Dependabot configuration, contribution and security guidelines.
