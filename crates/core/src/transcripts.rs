@@ -236,11 +236,15 @@ impl Scanner {
     }
 
     /// Totals over everything seen so far; a message that appears in several files counts once.
+    ///
+    /// The files are taken in the order of their paths, so if two files hold the same message
+    /// with different counts the one in the later path wins, the same way every time.
     pub fn stats<Tz: TimeZone>(&self, tz: &Tz) -> Stats {
-        let all: Vec<Entry> = self
-            .files
-            .values()
-            .flat_map(|state| state.entries.iter().cloned())
+        let mut paths: Vec<&PathBuf> = self.files.keys().collect();
+        paths.sort();
+        let all: Vec<Entry> = paths
+            .into_iter()
+            .flat_map(|path| self.files[path].entries.iter().cloned())
             .collect();
         aggregate(&all, tz)
     }

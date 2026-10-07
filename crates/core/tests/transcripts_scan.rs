@@ -178,3 +178,29 @@ fn req_014_a_line_with_windows_line_ending_is_read() {
     scanner.scan(claude.path(), UNIX_EPOCH).unwrap();
     assert_eq!(outputs(&scanner), 3);
 }
+
+#[test]
+fn req_014_the_same_message_in_two_files_resolves_the_same_way_every_time() {
+    let claude = tempfile::tempdir().unwrap();
+    append(
+        &transcript(claude.path(), "p1", "a.jsonl"),
+        &format!(
+            "{}
+",
+            line("m1", 5)
+        ),
+    );
+    append(
+        &transcript(claude.path(), "p1", "b.jsonl"),
+        &format!(
+            "{}
+",
+            line("m1", 9)
+        ),
+    );
+    for _ in 0..20 {
+        let mut scanner = Scanner::new();
+        scanner.scan(claude.path(), UNIX_EPOCH).unwrap();
+        assert_eq!(outputs(&scanner), 9, "the later path wins");
+    }
+}
