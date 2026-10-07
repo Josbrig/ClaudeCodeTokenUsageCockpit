@@ -89,6 +89,8 @@ The exact formulas of sections up to *Previous periods* are in [docs/concept.md]
 
 **Settings** (button in the detailed view): tolerance band (0 to 50 points), stale threshold (60 to 86,400 seconds), rate period (300 to 7,200 seconds), always on top, and the start view. They are saved in `settings.toml` and count at once. The window also remembers its position, size and view.
 
+**Start with Windows** (Windows only, in the same dialog, off by default): the box *Start with Windows (when you sign in)* makes Windows start the cockpit when you sign in. It acts at once and does not wait for *Save*, because it is an entry of Windows and not part of the settings file. It needs no administrator rights and writes one value (`UsageCockpit`) under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`; unticking the box removes it. The box shows what Windows really has: if the entry starts another file (you moved the program), the dialog says so and *Use this file* corrects it; if you switched the entry off in the Windows list of startup apps, the dialog says so and ticking the box switches it on again. Linux and macOS do not have this switch yet.
+
 ## Known limitations
 
 - **No data without a running Claude Code session.** Claude Code hands over usage only while it runs and after its first response of a session. The percentages exist only for Claude.ai Pro and Max subscriptions.
@@ -102,7 +104,7 @@ The exact formulas of sections up to *Previous periods* are in [docs/concept.md]
 
 ## Uninstall
 
-1. Remove the bridge (see above) so that Claude Code no longer calls the cockpit. Your backup files stay next to `settings.json`; delete them if you do not need them.
+1. Untick *Start with Windows* in the settings if you had switched it on (Windows). Remove the bridge (see above) so that Claude Code no longer calls the cockpit. Your backup files stay next to `settings.json`; delete them if you do not need them.
 2. Close the cockpit and delete the program file.
 3. Delete the data and configuration folders from the table above if you want to remove everything.
 

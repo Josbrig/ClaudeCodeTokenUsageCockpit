@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+mod autostart;
 mod bridge;
 mod cli;
 mod commands;

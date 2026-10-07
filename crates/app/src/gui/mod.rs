@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use crate::autostart;
 use cockpit_core::paths;
 use cockpit_core::settings::{self, Settings, StartView, WindowSettings};
 use eframe::egui::{self, Vec2};
@@ -327,6 +328,10 @@ impl Cockpit {
         match settings_view::show(ctx, &mut draft) {
             settings_view::Outcome::Open => self.dialog = Some(draft),
             settings_view::Outcome::Cancel => {}
+            settings_view::Outcome::Autostart(on) => {
+                change_autostart(&mut draft, on);
+                self.dialog = Some(draft);
+            }
             settings_view::Outcome::Save(values) => match self.apply_values(ctx, &values) {
                 Ok(()) => {}
                 Err(message) => {
@@ -402,7 +407,7 @@ impl eframe::App for Cockpit {
         });
         let dialog_open = self.dialog.is_some() || self.bridge_dialog.is_some();
         if open_settings && !dialog_open {
-            self.dialog = Some(settings_view::Draft::from_settings(&self.settings));
+            self.dialog = Some(new_draft(&self.settings));
         }
         if let Some(kind) = bridge_request.filter(|_| !dialog_open) {
             self.open_bridge_dialog(ctx, kind);
@@ -437,6 +442,36 @@ impl eframe::App for Cockpit {
 }
 
 /// The small window of a second start.
+/// The draft of the settings dialog with the real state of the start entry.
+fn new_draft(settings: &Settings) -> settings_view::Draft {
+    let mut draft = settings_view::Draft::from_settings(settings);
+    match std::env::current_exe()
+        .map_err(|error| format!("cannot determine the executable path: {error}"))
+        .and_then(|exe| autostart::state(&exe))
+    {
+        Ok(autostart::State::Unsupported) => {}
+        Ok(state) => draft.autostart = Some(state),
+        Err(message) => draft.autostart_error = Some(message),
+    }
+    draft
+}
+
+/// Switches the start entry on or off and shows the state the system has afterwards.
+fn change_autostart(draft: &mut settings_view::Draft, on: bool) {
+    draft.autostart_error = None;
+    match std::env::current_exe()
+        .map_err(|error| format!("cannot determine the executable path: {error}"))
+        .and_then(|exe| autostart::set(&exe, on))
+    {
+        Ok(state) => draft.autostart = Some(state),
+        Err(message) => {
+            log::warn!("the start entry cannot be changed: {message}");
+            draft.autostart_error =
+                Some(format!("The start entry could not be changed: {message}"));
+        }
+    }
+}
+
 struct AlreadyRunning;
 
 impl eframe::App for AlreadyRunning {
