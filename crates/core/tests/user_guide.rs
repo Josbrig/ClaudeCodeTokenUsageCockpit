@@ -27,6 +27,24 @@ fn missing<'a>(guide: &str, texts: impl IntoIterator<Item = &'a String>) -> Vec<
         .collect()
 }
 
+/// Short labels must stand out in the guide (bold, italic, code or the start of a table cell),
+/// otherwise a chance hit in running text would make the test pass although nothing explains the
+/// label. Long texts are specific enough to be looked for anywhere.
+fn explained(guide: &str, text: &str) -> bool {
+    if text.chars().count() >= 24 {
+        return guide.contains(text);
+    }
+    [
+        format!("**{text}**"),
+        format!("**{text}:**"),
+        format!("*{text}*"),
+        format!("`{text}`"),
+        format!("| {text}"),
+    ]
+    .iter()
+    .any(|marked| guide.contains(marked.as_str()))
+}
+
 fn owned(texts: &[&str]) -> Vec<String> {
     texts.iter().map(|text| (*text).to_owned()).collect()
 }
@@ -86,13 +104,25 @@ fn req_112_the_guide_shows_every_number_format_with_the_real_text() {
     assert_eq!(missing(&guide, &texts), Vec::<&String>::new());
 }
 
-/// The labels and buttons of the window itself (`gui/compact.rs`, `gui/detailed.rs` and the
-/// dialogs). They are not constants, so this list is kept by hand: when a label changes, change it
-/// here and in the guide.
+/// Messages and labels of the window that are not constants and that the scan of
+/// `crates/app/tests/user_guide_labels.rs` does not see (dialog results, messages). This list is kept by
+/// hand: when such a text changes, change it here and in the guide. Short labels must be marked up
+/// in the guide (see `explained`).
 #[test]
-fn req_112_the_guide_names_every_label_and_button_of_the_window() {
+fn req_112_the_guide_explains_the_hand_kept_list_of_labels_and_messages() {
     let guide = guide();
     let texts = owned(&[
+        "5-hour window",
+        "7-day window",
+        "5h",
+        "7d",
+        "Yes",
+        "No",
+        "OK",
+        "Change the Claude Code settings?",
+        "The bridge is set up.",
+        "The bridge is already set up; nothing to change.",
+        "The Claude Code status line is not the bridge; nothing to change.",
         "Used",
         "Remaining",
         "Resets",
@@ -113,7 +143,7 @@ fn req_112_the_guide_names_every_label_and_button_of_the_window() {
         "none yet",
         "Transcript statistics",
         "Per model",
-        "Per day",
+        "Per day (newest first)",
         "Cache share",
         "Tokens per percentage point",
         "Chart shows",
@@ -138,7 +168,11 @@ fn req_112_the_guide_names_every_label_and_button_of_the_window() {
         "Save",
         "Cancel",
     ]);
-    assert_eq!(missing(&guide, &texts), Vec::<&String>::new());
+    let unexplained: Vec<&String> = texts
+        .iter()
+        .filter(|text| !explained(&guide, text))
+        .collect();
+    assert_eq!(unexplained, Vec::<&String>::new());
 }
 
 /// The GitHub anchor of a heading: lower case, only letters, digits, spaces and hyphens, spaces

@@ -48,7 +48,7 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-109 Bridge speed and fallback output | #30, #31, #61, #69 | – | – | approved |
 | REQ-110 Automated tests | #22, #23, #63 | – | – | approved |
 | REQ-111 Release builds in CI | #57, #71 | – | – | approved |
-| REQ-112 User documentation | #59, #141, #142 | PR #146 | `req_112_*` (`crates/core/tests/user_guide.rs`) | approved |
+| REQ-112 User documentation | #59, #141, #142 | PR #146 | `req_112_*` (`crates/core/tests/user_guide.rs`, `crates/app/tests/user_guide_labels.rs`) | approved |
 | REQ-113 Display scaling | #68 | – | – | approved |
 | REQ-114 Colour-independent states | #44, #50, #68 | – | – | approved |
 | REQ-115 Data format versioning | #27, #29 | – | – | approved |
