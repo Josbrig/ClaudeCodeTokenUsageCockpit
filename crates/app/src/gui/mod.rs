@@ -10,10 +10,11 @@ use std::time::Duration;
 
 use cockpit_core::paths;
 use cockpit_core::settings::Settings;
-use cockpit_core::viewmodel::WindowView;
 use eframe::egui;
 
+mod compact;
 mod state;
+mod theme;
 
 use state::AppState;
 
@@ -88,17 +89,14 @@ impl eframe::App for Cockpit {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.drain();
         let view = self.state.view_model_now();
+        let mut action = compact::Action::default();
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Placeholder content: the real views follow in later issues.
-            ui.label(TITLE);
-            let text = match (&view.banner, &view.five_hour) {
-                (Some(banner), _) => banner.clone(),
-                (None, WindowView::Data(window)) => format!("5h {}", window.used_text),
-                (None, WindowView::NoData { text }) => text.clone(),
-            };
-            ui.label(text);
-            ui.label(&view.age_text);
+            action = compact::show(ui, view);
         });
+        if action.switch_view {
+            // Switching to the detailed view follows in a later issue.
+            log::info!("switch to the detailed view requested (not available yet)");
+        }
         ctx.request_repaint_after(REPAINT_EVERY);
     }
 }
