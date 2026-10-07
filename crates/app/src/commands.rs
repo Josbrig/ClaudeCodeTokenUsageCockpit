@@ -114,7 +114,7 @@ pub fn finish_uninstall(after: u32) -> ExitCode {
     let Some(loc) = uninstall_locations() else {
         return ExitCode::from(2);
     };
-    uninstall::finish_data(&loc, || uninstall::wait_for_exit(after));
+    let _ = uninstall::finish_data(&loc, || uninstall::wait_for_exit(after));
     ExitCode::SUCCESS
 }
 

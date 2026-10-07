@@ -29,8 +29,6 @@ pub struct Dialog {
     pub delete_data: bool,
     /// The plan as shown for the current choice.
     pub plan: String,
-    /// The folders are to be deleted by the helper after the window ended.
-    pub data_pending: bool,
 }
 
 /// What the person decided when the dialog is closed.
@@ -38,8 +36,8 @@ pub struct Dialog {
 pub enum Outcome {
     /// Still open.
     Open,
-    /// Closed. `exit`: end the window now; `start_helper`: start the helper that deletes the data.
-    Closed { exit: bool, start_helper: bool },
+    /// Closed. `exit`: end the window now.
+    Closed { exit: bool },
 }
 
 impl Dialog {
@@ -49,7 +47,6 @@ impl Dialog {
             stage: Stage::Ask,
             delete_data: false,
             plan: uninstall::describe(loc, Data::Keep),
-            data_pending: false,
         }
     }
 
@@ -60,12 +57,22 @@ impl Dialog {
     }
 
     /// The person said yes: does the steps and moves to the result.
-    pub fn confirm(&mut self, loc: &Locations) {
+    ///
+    /// `start_helper` starts the process that deletes the data after the window ended; it is
+    /// started here, so that a failure can still be told before the window closes.
+    pub fn confirm(&mut self, loc: &Locations, start_helper: &dyn Fn() -> std::io::Result<()>) {
         let report = uninstall::run(loc, data(self.delete_data), false);
-        self.data_pending = report.data_pending;
         let mut text = report.text();
         if report.data_pending {
-            text.push_str("\nThe history and settings are deleted when the cockpit has closed.");
+            match start_helper() {
+                Ok(()) => text
+                    .push_str("\nThe history and settings are deleted when the cockpit has closed."),
+                Err(error) => text.push_str(&format!(
+                    "\nThe history and settings could not be deleted automatically ({error}). Delete the folders {} and {} by hand.",
+                    loc.data_dir.display(),
+                    loc.config_dir.display()
+                )),
+            }
         }
         if report.failed {
             text.push_str("\nSomething could not be done: the cockpit stays open.");
@@ -114,10 +121,7 @@ pub fn show(ctx: &Context, dialog: &mut Dialog, loc: &Locations) -> Outcome {
                         confirmed = true;
                     }
                     if ui.button("Cancel").clicked() {
-                        outcome = Outcome::Closed {
-                            exit: false,
-                            start_helper: false,
-                        };
+                        outcome = Outcome::Closed { exit: false };
                     }
                 });
             }
@@ -125,10 +129,7 @@ pub fn show(ctx: &Context, dialog: &mut Dialog, loc: &Locations) -> Outcome {
                 ui.label(text);
                 ui.add_space(6.0);
                 if ui.button("OK").clicked() {
-                    outcome = Outcome::Closed {
-                        exit: *exit,
-                        start_helper: *exit && dialog.data_pending,
-                    };
+                    outcome = Outcome::Closed { exit: *exit };
                 }
             }
         });
@@ -136,19 +137,13 @@ pub fn show(ctx: &Context, dialog: &mut Dialog, loc: &Locations) -> Outcome {
         dialog.set_delete_data(loc, delete);
     }
     if confirmed {
-        dialog.confirm(loc);
+        dialog.confirm(loc, &|| uninstall::start_finish_helper(&loc.exe));
     }
     if !open && outcome == Outcome::Open {
         // The close button counts as OK on the result and as Cancel on the question.
         outcome = match &dialog.stage {
-            Stage::Ask => Outcome::Closed {
-                exit: false,
-                start_helper: false,
-            },
-            Stage::Done { exit, .. } => Outcome::Closed {
-                exit: *exit,
-                start_helper: *exit && dialog.data_pending,
-            },
+            Stage::Ask => Outcome::Closed { exit: false },
+            Stage::Done { exit, .. } => Outcome::Closed { exit: *exit },
         };
     }
     outcome
@@ -196,10 +191,28 @@ mod tests {
     fn req_119_keeping_the_data_ends_the_window_without_a_helper() {
         let (_root, loc) = loc();
         let mut dialog = Dialog::new(&loc);
-        dialog.confirm(&loc);
-        assert!(!dialog.data_pending);
+        dialog.confirm(&loc, &|| {
+            panic!("no helper is needed when the data is kept")
+        });
         assert!(matches!(dialog.stage, Stage::Done { exit: true, .. }));
         assert!(loc.data_dir.join("latest.json").exists());
+    }
+
+    #[test]
+    fn req_119_a_helper_that_cannot_start_is_told_in_the_result() {
+        let (_root, loc) = loc();
+        let mut dialog = Dialog::new(&loc);
+        dialog.set_delete_data(&loc, true);
+        dialog.confirm(&loc, &|| Err(std::io::Error::other("no way")));
+        let Stage::Done { text, .. } = &dialog.stage else {
+            panic!("the result is shown");
+        };
+        assert!(text.contains("by hand"), "{text}");
+        assert!(text.contains("no way"), "{text}");
+        assert!(
+            !text.contains("deleted when the cockpit has closed"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -207,8 +220,15 @@ mod tests {
         let (_root, loc) = loc();
         let mut dialog = Dialog::new(&loc);
         dialog.set_delete_data(&loc, true);
-        dialog.confirm(&loc);
-        assert!(dialog.data_pending);
+        let started = std::cell::Cell::new(false);
+        dialog.confirm(&loc, &|| {
+            started.set(true);
+            Ok(())
+        });
+        assert!(
+            started.get(),
+            "the helper is started when the data is to be deleted"
+        );
         let Stage::Done { text, exit } = &dialog.stage else {
             panic!("the result is shown");
         };

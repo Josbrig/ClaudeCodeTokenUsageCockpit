@@ -353,10 +353,7 @@ impl Cockpit {
         };
         match uninstall_view::show(ctx, &mut dialog, &loc) {
             uninstall_view::Outcome::Open => self.uninstall_dialog = Some((dialog, loc)),
-            uninstall_view::Outcome::Closed { exit, start_helper } => {
-                if start_helper && let Err(error) = uninstall::start_finish_helper(&loc.exe) {
-                    log::warn!("the helper that deletes the data cannot be started: {error}");
-                }
+            uninstall_view::Outcome::Closed { exit } => {
                 if exit {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }

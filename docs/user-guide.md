@@ -110,7 +110,7 @@ The program is portable: it installs nothing, so removing it is deleting its fil
    - the bridge is removed from the Claude Code settings (a backup is made first, your previous status line comes back);
    - the start entry of the system is removed, if you had switched *Start with Windows* on;
    - **only if you tick the box** *Also delete the history, logs and settings*: the data and configuration folders from the table above are deleted. The history is lost then. On the command line this is the option `--remove-data`.
-2. **Press OK.** The cockpit closes itself. If you chose to delete the data, a small hidden helper of the same program waits until the window has closed and then deletes the folders.
+2. **Press OK.** The cockpit closes itself. If you chose to delete the data, a small hidden helper of the same program (started when you pressed *Remove everything*) waits until the window has closed and then deletes the folders; it deletes nothing if the window is still open after five minutes or if the bridge is still set up. It has no window and cannot report problems: if a folder of the table above is still there after a minute, delete it by hand.
 3. **Delete the program file by hand.** The program cannot delete itself.
 
 What stays: the copies of your Claude Code settings (`settings.json.usage-cockpit-backup-*`) next to `settings.json`, and any file in the data or configuration folder that the cockpit did not create (the folders are cleaned file by file and only removed when they are empty). If something in the list could not be done, the cockpit stays open and says what failed; the history and settings are then kept, because the stored status line is needed to put your old one back.
