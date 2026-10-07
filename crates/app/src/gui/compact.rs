@@ -64,7 +64,9 @@ pub fn show(ui: &mut Ui, view: &ViewModel) -> Action {
             action.switch_view = response.clicked();
         });
     });
-    if ui.input(|input| input.key_pressed(egui::Key::D)) {
+    // Only a plain D: not with Ctrl, Alt or Shift, and not while a text field has the keyboard.
+    let typing = ui.ctx().wants_keyboard_input();
+    if !typing && ui.input(|i| i.modifiers.is_none() && i.key_pressed(egui::Key::D)) {
         action.switch_view = true;
     }
     action
@@ -145,12 +147,14 @@ fn row(ui: &mut Ui, label: &str, window: &WindowView, stale: bool) {
     );
     if stale {
         // A dashed outline marks stale values without relying on colour.
+        // Inset by half the line width so the whole line stays inside the clipped area.
+        let inner = rect.shrink(0.5);
         let corners = [
-            rect.left_top(),
-            rect.right_top(),
-            rect.right_bottom(),
-            rect.left_bottom(),
-            rect.left_top(),
+            inner.left_top(),
+            inner.right_top(),
+            inner.right_bottom(),
+            inner.left_bottom(),
+            inner.left_top(),
         ];
         let shapes = Shape::dashed_line(&corners, Stroke::new(1.0_f32, theme::GREY), 4.0, 3.0);
         painter.extend(shapes);
