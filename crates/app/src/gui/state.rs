@@ -210,6 +210,9 @@ impl AppState {
         if let Ok(Some(latest)) = store::read_latest(data_dir) {
             model.apply(Event::Record(latest));
         }
+        if !model.records.is_empty() {
+            load_error = None;
+        }
         Self {
             settings,
             model,
@@ -235,6 +238,11 @@ impl AppState {
             changed = true;
         }
         if changed {
+            // Data is arriving after all: a failed read of the history no longer says the data
+            // folder is unreadable.
+            if !self.model.records.is_empty() {
+                self.load_error = None;
+            }
             self.version += 1;
         }
         changed
@@ -436,5 +444,20 @@ mod tests {
             "{banner}"
         );
         assert!(banner.contains(&dir.path().display().to_string()));
+    }
+
+    #[test]
+    fn req_013_the_load_error_goes_away_once_records_arrive() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(store::HISTORY_FILE)).unwrap();
+        let mut state = AppState::new(dir.path(), Settings::default(), None, || {});
+        assert!(state.view_model(1_738_400_000_000).banner.is_some());
+        store::write_latest(dir.path(), &record(1_738_400_000_000, 10.0)).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !state.drain() {
+            assert!(Instant::now() < deadline, "the record did not arrive");
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(state.view_model(1_738_400_001_000).banner, None);
     }
 }
