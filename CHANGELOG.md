@@ -5,6 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+- The Windows executable no longer needs the Visual C++ runtime (the C runtime is linked in); the bridge starts faster (median 66 ms instead of 101 ms on the development machine).
+
 ### Added
 - Project brief, project description, research note on data sources and first draft of the requirements.
 - Repository setup: issue forms, pull request template, CI check, Dependabot configuration, contribution and security guidelines.

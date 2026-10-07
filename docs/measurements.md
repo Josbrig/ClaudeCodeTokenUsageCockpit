@@ -46,8 +46,19 @@ Fill in one row per platform and build. Date, version and commit come from `usag
 
 The Windows row was measured on the machine the program was developed on (release build, normal desktop load: 100 bridge calls, 5 starts, 10 minutes idle). It does not replace the owner's measurement on the reference machine.
 
+### What the Windows executable needs
+
+The Windows build links the C runtime into the executable (`.cargo/config.toml`, `+crt-static`), so it does not need the Visual C++ runtime (`VCRUNTIME140.dll`) or the Universal C Runtime that a clean Windows may lack. The release build imports only DLLs that are part of Windows 10 and 11:
+
+`advapi32`, `api-ms-win-core-synch-l1-2-0`, `bcryptprimitives`, `combase`, `dwmapi`, `gdi32`, `imm32`, `kernel32`, `ntdll`, `ole32`, `oleaut32`, `opengl32`, `shell32`, `shlwapi`, `uiautomationcore`, `user32`, `uxtheme`.
+
+To check it yourself, list the imports of `target\release\usage-cockpit.exe` with `dumpbin /dependents` (Visual Studio tools) or any PE viewer; `vcruntime140.dll` and `api-ms-win-crt-*` must not appear. Size of the executable: 6.9 MB before, 7.1 MB after. Not yet tried on a Windows without development tools (see the human issue for that).
+
+Effect on the bridge: with the runtime inside the file the start is faster. The median of 100 bridge calls was 66 ms on the machine of the table below (101 ms before the change), and the same program with `--version` also 66 ms.
+
 ### Notes on the Windows row
 
 - **Bridge:** two runs of 100 calls gave medians of 101.3 ms and 99.8 ms (95th percentile 105.3 and 106.5 ms). The same program started with `--version` took 100.3 ms and 97.7 ms, so the bridge's own work adds about 1 to 2 ms; an empty `cmd.exe /c exit` took 83 to 91 ms in earlier trials. Read literally, the criterion (median below 100 ms) is **borderline on this machine: it is missed by about 1 ms in one run and met by 0.2 ms in the other**. Almost all of the time is the start of the program on Windows (loading a 6.5 MB executable, security software), not the work of the bridge. Whether the requirement is meant for the whole call or for the bridge's own processing, and whether a smaller separate executable for the bridge is wanted, is for the owner to decide.
 - **Idle, 10 minutes:** CPU average 0.23 % of one core (maximum of a single second 14.0 %), memory average 88.0 MB (maximum 92.1 MB). Both are below the limits, the memory with little room. In this run the cockpit also read the real Claude Code transcripts of this machine (209 files, 811 MB in total, of which the files of the last 35 days count); an extra run of 90 seconds with an empty Claude folder gave 76.4 MB memory and 0.67 % CPU on average (that run was short and its CPU figure was disturbed by single busy seconds). So the transcript statistics cost roughly 12 MB here, and a machine with much more transcript text will need more. This is a point to watch against the 100 MB limit.
+- **After linking the C runtime in (issue #123), same machine, release build:** bridge median 66.1 ms in two runs (95th percentile 72.6 and 73.2 ms), so the criterion is met with a margin; start-up 464, 398, 398, 364 and 371 ms. The idle measurement (10 minutes) was not repeated; the table row above still shows the earlier build.
 - **Start-up:** 599, 588, 591, 618 and 621 ms until the line `window ready` (written after the first frame has been drawn), so about 0.6 s against the 2 s limit.
