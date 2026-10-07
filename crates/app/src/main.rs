@@ -6,6 +6,7 @@ mod cli;
 mod commands;
 mod console;
 mod gui;
+mod instance;
 mod setup;
 mod shell;
 
@@ -47,6 +48,20 @@ fn run_window() -> ExitCode {
         _ => return ExitCode::FAILURE,
     };
     let _ = logging::init(&data_dir, "cockpit", logging::DEFAULT_MAX_BYTES);
+    // Held until the window is closed; a second cockpit only tells the person and ends.
+    let _guard = match instance::acquire(&data_dir) {
+        Ok(guard) => guard,
+        Err(instance::AlreadyRunning) => {
+            log::info!("another cockpit is already running; this start ends");
+            return match gui::show_already_running() {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    log::error!("the notice window stopped with an error: {error}");
+                    ExitCode::SUCCESS
+                }
+            };
+        }
+    };
     let settings = settings::load(&config_dir.join("settings.toml"));
     match gui::run(&settings) {
         Ok(()) => ExitCode::SUCCESS,

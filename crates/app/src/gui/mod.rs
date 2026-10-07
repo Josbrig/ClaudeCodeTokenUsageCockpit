@@ -12,6 +12,10 @@ use eframe::egui;
 
 /// Default size of the compact view in logical pixels (concept §11.2).
 pub const DEFAULT_SIZE: [f32; 2] = [320.0, 120.0];
+/// Size of the "already running" window in logical pixels.
+pub const ALREADY_RUNNING_SIZE: [f32; 2] = [280.0, 90.0];
+/// Text of the "already running" window (concept §11.6).
+pub const ALREADY_RUNNING_TEXT: &str = "usage-cockpit is already running.";
 /// Title of the window.
 pub const TITLE: &str = "usage-cockpit";
 /// How often the window is drawn again without any input.
@@ -27,6 +31,23 @@ pub fn run(settings: &Settings) -> eframe::Result<()> {
         TITLE,
         options,
         Box::new(|_creation_context| Ok(Box::new(Cockpit))),
+    )
+}
+
+/// Opens a small window that says another cockpit is running, and returns when it is closed.
+pub fn show_already_running() -> eframe::Result<()> {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title(TITLE)
+            .with_inner_size(ALREADY_RUNNING_SIZE)
+            .with_resizable(false)
+            .with_always_on_top(),
+        ..Default::default()
+    };
+    eframe::run_native(
+        TITLE,
+        options,
+        Box::new(|_creation_context| Ok(Box::new(AlreadyRunning))),
     )
 }
 
@@ -52,5 +73,20 @@ impl eframe::App for Cockpit {
             ui.add(egui::ProgressBar::new(0.5).desired_width(ui.available_width()));
         });
         ctx.request_repaint_after(REPAINT_EVERY);
+    }
+}
+
+/// The small window of a second start.
+struct AlreadyRunning;
+
+impl eframe::App for AlreadyRunning {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.label(ALREADY_RUNNING_TEXT);
+            ui.add_space(8.0);
+            if ui.button("OK").clicked() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        });
     }
 }
