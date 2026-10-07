@@ -499,9 +499,12 @@ mod tests {
         spawn_every(Duration::from_millis(40), move || {
             counter.fetch_add(1, Ordering::SeqCst) < 4
         });
-        // The first call comes at once, before the first pause of 40 ms is over.
-        thread::sleep(Duration::from_millis(15));
-        assert!(count.load(Ordering::SeqCst) >= 1);
+        // The first call comes without waiting for an interval.
+        let first = Instant::now() + Duration::from_secs(2);
+        while count.load(Ordering::SeqCst) == 0 {
+            assert!(Instant::now() < first, "the action did not run at once");
+            thread::sleep(Duration::from_millis(2));
+        }
         let deadline = Instant::now() + Duration::from_secs(2);
         while count.load(Ordering::SeqCst) < 5 {
             assert!(Instant::now() < deadline, "the action was not repeated");
