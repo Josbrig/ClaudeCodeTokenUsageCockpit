@@ -63,7 +63,7 @@ fn run_window() -> ExitCode {
         }
     };
     let settings = settings::load(&config_dir.join("settings.toml"));
-    match gui::run(&settings) {
+    match gui::run(&settings, &data_dir) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             log::error!("the window stopped with an error: {error}");
