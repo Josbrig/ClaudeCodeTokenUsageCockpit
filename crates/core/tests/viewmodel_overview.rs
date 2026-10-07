@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Binding limit, weekly plan, data age, stale marker and previous periods of the view model.
-//! `NOW` is 3 h before the 5-hour reset (Saturday 2025-02-01 16:00 UTC, 17:00 in Berlin).
+//! `NOW` is 3 h before the 5-hour reset, which is Saturday 2025-02-01 16:00 UTC (17:00 in
+//! Berlin); so `NOW` is 13:00 UTC.
 
 use chrono_tz::Europe::Berlin;
 use cockpit_core::model::{Record, WindowKind, WindowSample};
@@ -58,13 +59,7 @@ fn is_binding(window: &WindowView) -> bool {
 
 /// Three samples in 30 minutes that rise by `step` percentage points each 15 minutes, ending
 /// at `used_now`: a rate of `step * 4` percent per hour for the window.
-fn rising(
-    used_now: f64,
-    step: f64,
-    resets_at: i64,
-    seven: bool,
-) -> Vec<(i64, Option<WindowSample>)> {
-    let _ = seven;
+fn rising(used_now: f64, step: f64, resets_at: i64) -> Vec<(i64, Option<WindowSample>)> {
     vec![
         (NOW_S - 1800, sample(used_now - 2.0 * step, resets_at)),
         (NOW_S - 900, sample(used_now - step, resets_at)),
@@ -77,8 +72,8 @@ fn req_008_binding_flag_set() {
     // Five-hour window: 60 % at 20 %/h, the limit comes in 2 h, before the reset in 3 h.
     // Seven-day window: 10 % at 1 %/h, the reset comes first.
     let reset_7d = RESET_5H + 3 * 86_400;
-    let five = rising(60.0, 5.0, RESET_5H, false);
-    let seven = rising(10.0, 0.25, reset_7d, true);
+    let five = rising(60.0, 5.0, RESET_5H);
+    let seven = rising(10.0, 0.25, reset_7d);
     let records: Vec<Record> = five
         .into_iter()
         .zip(seven)
@@ -94,8 +89,8 @@ fn req_008_binding_flag_set() {
 fn req_008_weekly_window_binds_when_it_runs_out_first() {
     // The weekly window runs out in 1 h at 20 %/h from 80 %, the five-hour window is calm.
     let reset_7d = RESET_5H + 3 * 86_400;
-    let five = rising(10.0, 0.25, RESET_5H, false);
-    let seven = rising(80.0, 5.0, reset_7d, true);
+    let five = rising(10.0, 0.25, RESET_5H);
+    let seven = rising(80.0, 5.0, reset_7d);
     let records: Vec<Record> = five
         .into_iter()
         .zip(seven)
