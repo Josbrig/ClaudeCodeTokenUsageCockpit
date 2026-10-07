@@ -11,9 +11,10 @@ use std::fmt::Display;
 use chrono::TimeZone;
 
 use crate::format;
-use crate::metrics::{self, PaceState};
+use crate::metrics::{self, Forecast, PaceState};
 use crate::model::{Record, WindowKind};
-use crate::periods;
+use crate::periods::{self, Period};
+use crate::planning;
 use crate::settings::Settings;
 use crate::transcripts::Stats;
 
@@ -55,13 +56,13 @@ pub struct ViewModel {
     pub five_hour: WindowView,
     /// The 7-day window.
     pub seven_day: WindowView,
-    /// The window whose limit binds first (part 2).
+    /// The window whose limit binds first.
     pub binding: Option<WindowKind>,
-    /// Weekly plan text (part 2).
+    /// Weekly plan text.
     pub weekly_text: Option<String>,
-    /// Data age or stale marker text (part 2).
+    /// Data age or stale marker text.
     pub age_text: String,
-    /// Whether the data counts as stale (part 2).
+    /// Whether the data counts as stale.
     pub stale: bool,
     /// Details of the session (part 3).
     pub session: SessionView,
@@ -69,7 +70,7 @@ pub struct ViewModel {
     pub transcripts: TranscriptView,
     /// Tokens per percentage point, labelled as an estimate (part 3).
     pub estimate_text: Option<String>,
-    /// The last finished periods (part 2).
+    /// The last finished periods, per window newest first, five-hour window before seven-day.
     pub previous: Vec<PreviousPeriod>,
 }
 
@@ -100,7 +101,7 @@ pub struct WindowData {
     pub glyph: &'static str,
     /// Text of the state (concept §11.1).
     pub label: &'static str,
-    /// Whether this window's limit binds first (part 2).
+    /// Whether this window's limit binds first.
     pub binding: bool,
     /// `62.0%`.
     pub used_text: String,
@@ -132,9 +133,19 @@ pub struct SessionView {}
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TranscriptView {}
 
-/// A finished period of a window (filled in part 2).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct PreviousPeriod {}
+/// A finished period of a window.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreviousPeriod {
+    /// Which window the period belongs to.
+    pub kind: WindowKind,
+    /// Reset time that ended the period, in the local time zone, `Mon 14:30`.
+    pub reset_local_text: String,
+    /// Used share at the end of the period (last sample), `83.0%`.
+    pub final_used_text: String,
+}
+
+/// How many finished periods are listed per window.
+pub const PREVIOUS_PERIODS_PER_WINDOW: usize = 3;
 
 /// Glyph of a pace state (concept §11.1).
 pub fn glyph(state: PaceState) -> &'static str {
@@ -159,19 +170,103 @@ pub fn build<Tz: TimeZone>(inputs: &Inputs<'_, Tz>) -> ViewModel
 where
     Tz::Offset: Display,
 {
+    let (mut five_hour, five_forecast) = window_view(inputs, WindowKind::FiveHour);
+    let (mut seven_day, seven_forecast) = window_view(inputs, WindowKind::SevenDay);
+    let binding = metrics::binding(five_forecast.as_ref(), seven_forecast.as_ref());
+    mark_binding(&mut five_hour, binding == Some(WindowKind::FiveHour));
+    mark_binding(&mut seven_day, binding == Some(WindowKind::SevenDay));
+    let (age_text, stale) = age(inputs);
     ViewModel {
         banner: banner(inputs),
-        five_hour: window_view(inputs, WindowKind::FiveHour),
-        seven_day: window_view(inputs, WindowKind::SevenDay),
-        binding: None,
-        weekly_text: None,
-        age_text: String::new(),
-        stale: false,
+        weekly_text: weekly_text(inputs, &five_hour, &seven_day),
+        five_hour,
+        seven_day,
+        binding,
+        age_text,
+        stale,
         session: SessionView::default(),
         transcripts: TranscriptView::default(),
         estimate_text: None,
-        previous: Vec::new(),
+        previous: previous_periods(inputs),
     }
+}
+
+fn mark_binding(window: &mut WindowView, binding: bool) {
+    if let WindowView::Data(data) = window {
+        data.binding = binding;
+    }
+}
+
+/// Age of the newest record as text, and whether the data counts as stale (concept §7.9);
+/// without any record the text is empty.
+fn age<Tz: TimeZone>(inputs: &Inputs<'_, Tz>) -> (String, bool) {
+    let Some(latest) = metrics::latest(inputs.records) else {
+        return (String::new(), false);
+    };
+    let age_s = metrics::data_age_s(latest, inputs.now_ms);
+    let stale = metrics::is_stale(
+        age_s,
+        inputs.settings.stale_after_s,
+        inputs.last_error_ms,
+        latest.received_at_ms,
+    );
+    let text = if stale {
+        format::stale(age_s)
+    } else {
+        format::age(age_s)
+    };
+    (text, stale)
+}
+
+/// The weekly plan text; only with values for both windows (concept §7.8).
+fn weekly_text<Tz: TimeZone>(
+    inputs: &Inputs<'_, Tz>,
+    five_hour: &WindowView,
+    seven_day: &WindowView,
+) -> Option<String> {
+    if !matches!(
+        (five_hour, seven_day),
+        (WindowView::Data(_), WindowView::Data(_))
+    ) {
+        return None;
+    }
+    let sample = metrics::latest(inputs.records)?.seven_day.as_ref()?;
+    let plan = planning::weekly(
+        sample.used_pct,
+        sample.resets_at,
+        inputs.now_ms.div_euclid(1000),
+    )?;
+    Some(format::weekly(plan.windows_left, plan.share_per_window_pct))
+}
+
+/// The last finished periods of each window, newest first, five-hour window before seven-day.
+fn previous_periods<Tz: TimeZone>(inputs: &Inputs<'_, Tz>) -> Vec<PreviousPeriod>
+where
+    Tz::Offset: Display,
+{
+    let now_s = inputs.now_ms.div_euclid(1000);
+    [WindowKind::FiveHour, WindowKind::SevenDay]
+        .into_iter()
+        .flat_map(|kind| {
+            let finished: Vec<Period> = periods::split(inputs.records, kind)
+                .into_iter()
+                .filter(|p| p.resets_at <= now_s)
+                .collect();
+            finished
+                .into_iter()
+                .rev()
+                .take(PREVIOUS_PERIODS_PER_WINDOW)
+                .filter_map(|period| {
+                    let final_used = period.samples.last()?.1.clamp(0.0, 100.0);
+                    Some(PreviousPeriod {
+                        kind,
+                        reset_local_text: format::local_time(period.resets_at, inputs.tz),
+                        final_used_text: format::pct(final_used),
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 /// The message for the whole application, in the order of concept §11.7: a data folder that
@@ -193,16 +288,21 @@ fn no_data(text: &str) -> WindowView {
 }
 
 /// One window from the latest record and the current period of that window.
-fn window_view<Tz: TimeZone>(inputs: &Inputs<'_, Tz>, kind: WindowKind) -> WindowView
+///
+/// Also returns the exhaustion forecast, which decides the binding limit.
+fn window_view<Tz: TimeZone>(
+    inputs: &Inputs<'_, Tz>,
+    kind: WindowKind,
+) -> (WindowView, Option<Forecast>)
 where
     Tz::Offset: Display,
 {
     let Some(sample) = metrics::latest(inputs.records).and_then(|r| r.window(kind)) else {
-        return no_data(WINDOW_NO_DATA);
+        return (no_data(WINDOW_NO_DATA), None);
     };
     let now_s = inputs.now_ms.div_euclid(1000);
     if sample.resets_at <= now_s {
-        return no_data(WINDOW_RESET_PASSED);
+        return (no_data(WINDOW_RESET_PASSED), None);
     }
     let settings = inputs.settings;
     let basic = metrics::basic(
@@ -218,7 +318,7 @@ where
     let forecast = metrics::forecast(basic.used, sample.resets_at, rate, now_s);
     let unused = metrics::unused_at_reset(basic.used, sample.resets_at, rate, now_s);
     let recommended = metrics::recommended_rate(basic.used, sample.resets_at, now_s);
-    WindowView::Data(WindowData {
+    let view = WindowView::Data(WindowData {
         used: basic.used,
         target: basic.target,
         state: basic.state,
@@ -235,5 +335,6 @@ where
         forecast_text: format::forecast(&forecast, now_s),
         unused_text: format::unused(unused),
         recommended_text: format::rate(recommended),
-    })
+    });
+    (view, Some(forecast))
 }
