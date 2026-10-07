@@ -148,3 +148,27 @@ pub fn forecast(forecast: &Forecast, now_s: i64) -> String {
         Forecast::NotAvailable => NOT_AVAILABLE.to_owned(),
     }
 }
+
+/// A whole number with thousands separators: `1,234,567`.
+pub fn thousands(value: u64) -> String {
+    let mut reversed = String::new();
+    let mut in_group = 0;
+    for digit in value.to_string().chars().rev() {
+        if in_group == 3 {
+            reversed.push(',');
+            in_group = 0;
+        }
+        reversed.push(digit);
+        in_group += 1;
+    }
+    reversed.chars().rev().collect()
+}
+
+/// An amount in US dollars with two decimals: `0.01 USD`; `–` where it is not a number.
+pub fn usd(value: f64) -> String {
+    if value.is_finite() {
+        format!("{} USD", fixed(value, 2))
+    } else {
+        NO_VALUE.to_owned()
+    }
+}

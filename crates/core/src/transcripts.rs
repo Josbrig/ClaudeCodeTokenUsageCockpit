@@ -82,9 +82,21 @@ pub struct Stats {
     /// Number of different messages that were understood. 0 means the format was not
     /// recognised and the statistics are not available.
     pub understood_lines: usize,
+    /// `(timestamp in Unix milliseconds, all four token counts of the message)`, oldest first.
+    /// Lets a caller sum the tokens of a time range, for example of a usage period.
+    pub token_points: Vec<(i64, u64)>,
 }
 
 impl Stats {
+    /// Tokens of the messages written from `from_ms` to `to_ms`, both ends included.
+    pub fn tokens_between(&self, from_ms: i64, to_ms: i64) -> u64 {
+        let start = self.token_points.partition_point(|&(at, _)| at < from_ms);
+        self.token_points[start..]
+            .iter()
+            .take_while(|&&(at, _)| at <= to_ms)
+            .fold(0u64, |sum, &(_, tokens)| sum.saturating_add(tokens))
+    }
+
     /// The sum over all models.
     pub fn total(&self) -> Usage {
         self.per_model
@@ -144,7 +156,15 @@ pub fn aggregate<Tz: TimeZone>(entries: &[Entry], tz: &Tz) -> Stats {
             .add(&entry.usage);
         let day = entry.timestamp.with_timezone(tz).date_naive();
         stats.per_day.entry(day).or_default().add(&entry.usage);
+        let u = &entry.usage;
+        let tokens = [u.input, u.output, u.cache_creation, u.cache_read]
+            .into_iter()
+            .fold(0u64, u64::saturating_add);
+        stats
+            .token_points
+            .push((entry.timestamp.timestamp_millis(), tokens));
     }
+    stats.token_points.sort_unstable();
     stats
 }
 

@@ -16,7 +16,7 @@ use crate::model::{Record, WindowKind};
 use crate::periods::{self, Period};
 use crate::planning;
 use crate::settings::Settings;
-use crate::transcripts::Stats;
+use crate::transcripts::{Stats, Usage};
 
 /// Banner when there is no record yet (concept §11.7).
 pub const BANNER_NO_DATA_YET: &str = "No data yet. Set up the bridge and use Claude Code once.";
@@ -125,13 +125,75 @@ pub struct WindowData {
     pub recommended_text: String,
 }
 
-/// Session details from the latest record (filled in part 3).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct SessionView {}
+/// Heading of the session details.
+pub const SESSION_HEADING: &str = "From Claude Code";
+/// Text for a session value the latest record does not hold.
+pub const SESSION_NO_DATA: &str = "no data";
+/// Text of the transcript statistics when there are none.
+pub const TRANSCRIPTS_NOT_AVAILABLE: &str = "transcript statistics not available";
+/// How many days the transcript table shows at most.
+pub const MAX_TRANSCRIPT_DAYS: usize = 35;
 
-/// Transcript statistics for the detailed view (filled in part 3).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct TranscriptView {}
+/// Session details from the latest record (concept §11.3, item 4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionView {
+    /// Heading above the details: "From Claude Code".
+    pub heading: &'static str,
+    /// Display name of the active model, or `no data`.
+    pub model_text: String,
+    /// Context window usage, `42.0%`, or `no data`.
+    pub context_text: String,
+    /// Session cost as computed by Claude Code, `0.01 USD`, or `no data`.
+    pub cost_text: String,
+}
+
+/// Token counts as text with thousands separators.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsageText {
+    /// Input tokens.
+    pub input: String,
+    /// Output tokens.
+    pub output: String,
+    /// Cache creation tokens.
+    pub cache_creation: String,
+    /// Cache read tokens.
+    pub cache_read: String,
+}
+
+impl From<&Usage> for UsageText {
+    fn from(usage: &Usage) -> Self {
+        Self {
+            input: format::thousands(usage.input),
+            output: format::thousands(usage.output),
+            cache_creation: format::thousands(usage.cache_creation),
+            cache_read: format::thousands(usage.cache_read),
+        }
+    }
+}
+
+/// Transcript statistics for the detailed view (concept §8, §11.3 item 5).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TranscriptView {
+    /// `false` if there are no statistics; `cache_share_text` then holds the reason.
+    pub available: bool,
+    /// Totals per model, in the order of the model names.
+    pub per_model: Vec<(String, UsageText)>,
+    /// Totals per local day as `YYYY-MM-DD`, newest first, at most [`MAX_TRANSCRIPT_DAYS`].
+    pub per_day: Vec<(String, UsageText)>,
+    /// `cache share 87.0%`, `cache share not available`, or the reason for missing statistics.
+    pub cache_share_text: String,
+}
+
+impl Default for TranscriptView {
+    fn default() -> Self {
+        Self {
+            available: false,
+            per_model: Vec::new(),
+            per_day: Vec::new(),
+            cache_share_text: TRANSCRIPTS_NOT_AVAILABLE.to_owned(),
+        }
+    }
+}
 
 /// A finished period of a window.
 #[derive(Debug, Clone, PartialEq)]
@@ -184,11 +246,76 @@ where
         binding,
         age_text,
         stale,
-        session: SessionView::default(),
-        transcripts: TranscriptView::default(),
-        estimate_text: None,
+        session: session(inputs),
+        transcripts: transcripts(inputs.stats),
+        estimate_text: estimate(inputs),
         previous: previous_periods(inputs),
     }
+}
+
+/// Session details from the latest record of any session.
+fn session<Tz: TimeZone>(inputs: &Inputs<'_, Tz>) -> SessionView {
+    let latest = metrics::latest(inputs.records);
+    let no_data = || SESSION_NO_DATA.to_owned();
+    SessionView {
+        heading: SESSION_HEADING,
+        model_text: latest
+            .and_then(|r| r.model.clone())
+            .filter(|m| !m.is_empty())
+            .unwrap_or_else(no_data),
+        context_text: latest
+            .and_then(|r| r.context_used_pct)
+            .filter(|v| v.is_finite())
+            .map_or_else(no_data, format::pct),
+        cost_text: latest
+            .and_then(|r| r.cost_usd)
+            .filter(|v| v.is_finite())
+            .map_or_else(no_data, format::usd),
+    }
+}
+
+/// The transcript table; unavailable without statistics or if no line was understood.
+fn transcripts(stats: Option<&Stats>) -> TranscriptView {
+    let Some(stats) = stats.filter(|s| s.understood_lines > 0) else {
+        return TranscriptView::default();
+    };
+    let cache_share = match stats.total().cache_share() {
+        Some(share) => format!("cache share {}", format::pct(share * 100.0)),
+        None => "cache share not available".to_owned(),
+    };
+    TranscriptView {
+        available: true,
+        per_model: stats
+            .per_model
+            .iter()
+            .map(|(model, usage)| (model.clone(), UsageText::from(usage)))
+            .collect(),
+        per_day: stats
+            .per_day
+            .iter()
+            .rev()
+            .take(MAX_TRANSCRIPT_DAYS)
+            .map(|(day, usage)| (day.to_string(), UsageText::from(usage)))
+            .collect(),
+        cache_share_text: cache_share,
+    }
+}
+
+/// Tokens per percentage point of the current five-hour period, labelled as an estimate
+/// (concept §7.10); `None` where it cannot be computed.
+fn estimate<Tz: TimeZone>(inputs: &Inputs<'_, Tz>) -> Option<String> {
+    let stats = inputs.stats.filter(|s| s.understood_lines > 0)?;
+    let now_s = inputs.now_ms.div_euclid(1000);
+    let periods = periods::split(inputs.records, WindowKind::FiveHour);
+    let period = periods::current(&periods, now_s)?;
+    let from_ms = period.samples.first()?.0;
+    let tokens = stats.tokens_between(from_ms, inputs.now_ms);
+    let per_pp = metrics::tokens_per_pp(period, tokens)?;
+    // The estimate has no more than a few significant digits of meaning; whole tokens are shown.
+    Some(format!(
+        "≈ {} tokens per 1% (estimate)",
+        format::thousands(per_pp.round() as u64)
+    ))
 }
 
 fn mark_binding(window: &mut WindowView, binding: bool) {

@@ -185,3 +185,24 @@ fn req_005_forecast_text_does_not_overflow_for_extreme_times() {
     let text = forecast(&Forecast::LimitFirst { at_s: i64::MAX }, i64::MIN);
     assert!(text.starts_with("limit in "), "{text}");
 }
+
+#[test]
+fn req_014_thousands_separators() {
+    use cockpit_core::format::thousands;
+    assert_eq!(thousands(0), "0");
+    assert_eq!(thousands(999), "999");
+    assert_eq!(thousands(1_000), "1,000");
+    assert_eq!(thousands(1_234_567), "1,234,567");
+    assert_eq!(thousands(100_000), "100,000");
+    assert_eq!(thousands(u64::MAX), "18,446,744,073,709,551,615");
+}
+
+#[test]
+fn req_028_usd_has_two_decimals() {
+    use cockpit_core::format::usd;
+    assert_eq!(usd(0.0123), "0.01 USD");
+    assert_eq!(usd(0.005), "0.01 USD", "half rounds away from zero");
+    assert_eq!(usd(12.0), "12.00 USD");
+    assert_eq!(usd(0.0), "0.00 USD");
+    assert_eq!(usd(f64::NAN), "–");
+}
