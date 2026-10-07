@@ -57,8 +57,9 @@ pub struct Basic {
 /// window_len_s`, limited to 0 to 1.
 pub fn basic(used: f64, resets_at: i64, window_len_s: i64, now_s: i64, tol_pp: f64) -> Basic {
     let used = used.clamp(0.0, 100.0);
-    let secs_to_reset = (resets_at - now_s).max(0);
-    let elapsed_s = now_s - (resets_at - window_len_s);
+    // Saturating: a reset time far away (a damaged record) must not overflow.
+    let secs_to_reset = resets_at.saturating_sub(now_s).max(0);
+    let elapsed_s = now_s.saturating_sub(resets_at.saturating_sub(window_len_s));
     let elapsed_share = (elapsed_s as f64 / window_len_s as f64).clamp(0.0, 1.0);
     let target = 100.0 * elapsed_share;
     let deviation_pp = used - target;
@@ -159,7 +160,7 @@ pub fn forecast(used: f64, resets_at: i64, rate: Option<f64>, now_s: i64) -> For
 pub fn unused_at_reset(used: f64, resets_at: i64, rate: Option<f64>, now_s: i64) -> Option<f64> {
     let used = used.clamp(0.0, 100.0);
     let rate = rate.filter(|r| r.is_finite())?;
-    let hours_left = (resets_at - now_s).max(0) as f64 / 3600.0;
+    let hours_left = resets_at.saturating_sub(now_s).max(0) as f64 / 3600.0;
     Some((100.0 - (used + rate * hours_left)).max(0.0))
 }
 
@@ -167,7 +168,7 @@ pub fn unused_at_reset(used: f64, resets_at: i64, rate: Option<f64>, now_s: i64)
 /// (concept §7.6, REQ-007). `None` once the reset time has been reached.
 pub fn recommended_rate(used: f64, resets_at: i64, now_s: i64) -> Option<f64> {
     let used = used.clamp(0.0, 100.0);
-    let secs_left = resets_at - now_s;
+    let secs_left = resets_at.saturating_sub(now_s);
     (secs_left > 0).then(|| (100.0 - used) / (secs_left as f64 / 3600.0))
 }
 

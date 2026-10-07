@@ -37,7 +37,8 @@ pub fn split(records: &[Record], kind: WindowKind) -> Vec<Period> {
         let sample = (record.received_at_ms, window.used_pct);
         match periods.last_mut() {
             Some(period)
-                if (window.resets_at - period.resets_at).abs() <= RESET_TOLERANCE_S
+                if window.resets_at.abs_diff(period.resets_at)
+                    <= RESET_TOLERANCE_S.unsigned_abs()
                     && received_s < period.resets_at =>
             {
                 period.resets_at = window.resets_at;
