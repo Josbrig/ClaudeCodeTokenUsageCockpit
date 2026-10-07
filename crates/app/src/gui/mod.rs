@@ -258,28 +258,36 @@ impl Cockpit {
 
     /// Draws the settings dialog if it is open and takes its decision.
     fn show_dialog(&mut self, ctx: &egui::Context) {
-        let Some(draft) = self.dialog.as_mut() else {
+        let Some(mut draft) = self.dialog.take() else {
             return;
         };
-        match settings_view::show(ctx, draft) {
-            settings_view::Outcome::Open => {}
-            settings_view::Outcome::Cancel => self.dialog = None,
-            settings_view::Outcome::Save(values) => {
-                self.dialog = None;
-                self.apply_values(ctx, &values);
-            }
+        match settings_view::show(ctx, &mut draft) {
+            settings_view::Outcome::Open => self.dialog = Some(draft),
+            settings_view::Outcome::Cancel => {}
+            settings_view::Outcome::Save(values) => match self.apply_values(ctx, &values) {
+                Ok(()) => {}
+                Err(message) => {
+                    // The dialog stays open and says why nothing was saved.
+                    draft.save_error = Some(message);
+                    self.dialog = Some(draft);
+                }
+            },
         }
     }
 
     /// Writes the dialog values and makes them count at once: the file keeps everything else as
     /// it is, the window level and the view model follow, and the window shows the chosen start
     /// view now, so that what is saved at exit is what was chosen.
-    fn apply_values(&mut self, ctx: &egui::Context, values: &settings_view::Values) {
+    fn apply_values(
+        &mut self,
+        ctx: &egui::Context,
+        values: &settings_view::Values,
+    ) -> Result<(), String> {
         let mut on_disk = settings::load(&self.settings_path);
         values.apply_to(&mut on_disk);
         if let Err(error) = settings::save(&self.settings_path, &on_disk) {
             log::warn!("the settings cannot be saved: {error}");
-            return;
+            return Err(format!("The settings could not be saved: {error}"));
         }
         values.apply_to(&mut self.settings);
         self.state.set_settings(self.settings.clone());
@@ -290,6 +298,7 @@ impl Cockpit {
         if wanted != self.view {
             self.switch_view(ctx);
         }
+        Ok(())
     }
 
     /// Applies the setting "always on top" when it differs from what the window has.
@@ -319,7 +328,8 @@ impl eframe::App for Cockpit {
         if open_settings && self.dialog.is_none() {
             self.dialog = Some(settings_view::Draft::from_settings(&self.settings));
         }
-        if switch {
+        // While the settings dialog is open the views behind it do not react.
+        if switch && self.dialog.is_none() {
             self.switch_view(ctx);
         }
         self.show_dialog(ctx);
@@ -349,5 +359,68 @@ impl eframe::App for AlreadyRunning {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cockpit(settings_path: PathBuf) -> (Cockpit, tempfile::TempDir) {
+        let data = tempfile::tempdir().unwrap();
+        let settings = Settings::default();
+        let state = AppState::new(data.path(), settings.clone(), None, || {});
+        (Cockpit::new(state, settings, settings_path), data)
+    }
+
+    fn values() -> settings_view::Values {
+        settings_view::Values {
+            tolerance_pp: 12.0,
+            stale_after_s: 120,
+            rate_period_s: 900,
+            always_on_top: false,
+            start_view: StartView::Compact,
+        }
+    }
+
+    #[test]
+    fn req_024_a_failed_save_applies_nothing_and_says_why() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a-file");
+        std::fs::write(&file, b"x").unwrap();
+        // The settings folder would have to lie below a regular file.
+        let (mut cockpit, _data) = cockpit(file.join("config").join("settings.toml"));
+        let before = cockpit.settings.clone();
+        let result = cockpit.apply_values(&egui::Context::default(), &values());
+        let message = result.unwrap_err();
+        assert!(
+            message.starts_with("The settings could not be saved"),
+            "{message}"
+        );
+        assert_eq!(cockpit.settings, before, "nothing is applied");
+    }
+
+    #[test]
+    fn req_024_a_successful_save_applies_the_values_and_keeps_the_rest_of_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.toml");
+        std::fs::write(
+            &path,
+            "version = 1\nstale_after_s = 700\n[window]\nx = 321.0\n",
+        )
+        .unwrap();
+        let (mut cockpit, _data) = cockpit(path.clone());
+        cockpit
+            .apply_values(&egui::Context::default(), &values())
+            .unwrap();
+        assert_eq!(cockpit.settings.tolerance_pp, 12.0);
+        assert!(!cockpit.settings.always_on_top);
+        let on_disk = settings::load(&path);
+        assert_eq!(on_disk.tolerance_pp, 12.0);
+        assert_eq!(on_disk.stale_after_s, 120, "the dialog value wins");
+        assert_eq!(
+            on_disk.window.x, 321.0,
+            "the window geometry in the file stays"
+        );
     }
 }

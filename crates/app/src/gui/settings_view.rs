@@ -60,6 +60,8 @@ pub struct Draft {
     pub always_on_top: bool,
     /// Start view.
     pub start_view: StartView,
+    /// Why the last attempt to save failed, shown in the dialog until the next attempt.
+    pub save_error: Option<String>,
 }
 
 /// Which field has a problem and what it is.
@@ -80,6 +82,7 @@ impl Draft {
             rate_period: settings.rate_period_s.to_string(),
             always_on_top: settings.always_on_top,
             start_view: settings.start_view,
+            save_error: None,
         }
     }
 
@@ -194,6 +197,10 @@ pub fn show(ctx: &Context, draft: &mut Draft) -> Outcome {
                     ui.colored_label(Color32::from_rgb(0xD5, 0x5E, 0x00), &error.message);
                 }
             }
+            if let Some(message) = &draft.save_error {
+                ui.add_space(4.0);
+                ui.colored_label(Color32::from_rgb(0xD5, 0x5E, 0x00), message);
+            }
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let can_save = validation.is_ok();
@@ -230,6 +237,7 @@ mod tests {
             rate_period: rate.to_owned(),
             always_on_top: true,
             start_view: StartView::Compact,
+            save_error: None,
         }
     }
 
