@@ -3,7 +3,8 @@
 //! out what the view model provides; all texts and decisions come from there.
 
 use cockpit_core::viewmodel::{
-    BINDING_GLYPH, NO_DATA_GLYPH, STALE_GLYPH, STALE_LABEL, ViewModel, WindowView,
+    BANNER_NO_DATA_YET, BINDING_GLYPH, NO_DATA_GLYPH, STALE_GLYPH, STALE_LABEL, ViewModel,
+    WindowView,
 };
 use eframe::egui::{
     self, Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke,
@@ -36,11 +37,14 @@ const ICON_SPACE: f32 = 15.0;
 pub struct Action {
     /// The switch button or the key `D` was used: show the detailed view.
     pub switch_view: bool,
+    /// The button "Set up bridge" under the no-data message was used.
+    pub setup_bridge: bool,
 }
 
 /// Draws the compact view into `ui`.
 pub fn show(ui: &mut Ui, view: &ViewModel) -> Action {
     ui.spacing_mut().item_spacing = Vec2::new(0.0, 2.0);
+    let mut action = Action::default();
     if let Some(banner) = &view.banner {
         ui.horizontal_wrapped(|ui| {
             let (rect, _) = ui.allocate_exact_size(Vec2::splat(ICON_SIZE), Sense::hover());
@@ -50,11 +54,14 @@ pub fn show(ui: &mut Ui, view: &ViewModel) -> Action {
             ui.add_space(5.0);
             ui.label(banner);
         });
+        // Without any record the first thing to do is to set up the bridge (concept §11.7).
+        if banner == BANNER_NO_DATA_YET && ui.button("Set up bridge").clicked() {
+            action.setup_bridge = true;
+        }
     } else {
         row(ui, "5h", &view.five_hour, view.stale);
         row(ui, "7d", &view.seven_day, view.stale);
     }
-    let mut action = Action::default();
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(&view.age_text).size(TEXT_SIZE));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
