@@ -106,6 +106,7 @@ pub fn setup(
         &command,
         current.as_ref().filter(|_| !current_is_bridge),
         bridge_state,
+        existed,
     );
     if !confirm(&plan) {
         return Ok(SetupOutcome::Declined);
@@ -350,7 +351,15 @@ fn back_up(path: &Path) -> Result<PathBuf, SetupError> {
     unreachable!("the loop ends with a return")
 }
 
-fn setup_plan(settings: &Path, command: &str, replaced: Option<&Value>, state: &Path) -> String {
+/// The plan of `setup` in words. `file_exists`: the settings file is there, so a backup is made;
+/// otherwise the file is created and there is nothing to back up.
+fn setup_plan(
+    settings: &Path,
+    command: &str,
+    replaced: Option<&Value>,
+    state: &Path,
+    file_exists: bool,
+) -> String {
     let mut plan = format!(
         "File: {}\nstatusLine will be set to the command: {command}\n",
         settings.display()
@@ -362,7 +371,11 @@ fn setup_plan(settings: &Path, command: &str, replaced: Option<&Value>, state: &
         )),
         None => plan.push_str("There is no other statusLine to keep.\n"),
     }
-    plan.push_str("A backup of the file is made first.");
+    plan.push_str(if file_exists {
+        "A backup of the file is made first."
+    } else {
+        "The file does not exist yet and will be created; there is nothing to back up."
+    });
     plan
 }
 
@@ -423,6 +436,42 @@ mod tests {
             .collect();
         found.sort();
         found
+    }
+
+    #[test]
+    fn req_023_the_plan_mentions_a_backup_only_when_there_is_a_file() {
+        let d = dirs();
+        let mut plan = String::new();
+        let mut keep = |text: &str| {
+            plan = text.to_owned();
+            false
+        };
+        // no settings file yet
+        assert_eq!(
+            setup(&d.settings, &d.exe, &d.state, &mut keep).unwrap(),
+            SetupOutcome::Declined
+        );
+        assert!(
+            plan.contains("does not exist yet and will be created"),
+            "{plan}"
+        );
+        assert!(
+            !plan.contains("A backup of the file is made first"),
+            "{plan}"
+        );
+        // with a settings file
+        put_settings(&d, r#"{"a":1}"#);
+        let mut plan = String::new();
+        let mut keep = |text: &str| {
+            plan = text.to_owned();
+            false
+        };
+        setup(&d.settings, &d.exe, &d.state, &mut keep).unwrap();
+        assert!(
+            plan.contains("A backup of the file is made first."),
+            "{plan}"
+        );
+        assert!(!plan.contains("does not exist yet"), "{plan}");
     }
 
     #[test]
