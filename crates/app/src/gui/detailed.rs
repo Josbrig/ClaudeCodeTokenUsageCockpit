@@ -122,6 +122,7 @@ fn data_grid(ui: &mut Ui, id: &str, data: &WindowData, stale: bool) {
     if data.binding {
         ui.label("This window's limit binds first.");
     }
+    super::chart::show(ui, &format!("{id} chart"), &data.chart, color);
     egui::Grid::new(id)
         .num_columns(2)
         .striped(true)

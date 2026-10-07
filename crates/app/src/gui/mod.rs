@@ -13,6 +13,7 @@ use cockpit_core::settings::{self, Settings, StartView, WindowSettings};
 use eframe::egui::{self, Vec2};
 
 mod bridge_view;
+mod chart;
 mod compact;
 mod detailed;
 mod settings_view;

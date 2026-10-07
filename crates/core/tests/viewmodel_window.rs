@@ -246,3 +246,46 @@ fn req_016_later_parts_have_not_available_defaults() {
     assert!(!vm.stale);
     assert!(vm.previous.is_empty());
 }
+
+#[test]
+fn req_030_chart_contains_target_line_endpoints() {
+    let vm = view(&[record(NOW_S, sample(60.0, RESET_5H), None)], NOW_MS, None);
+    let chart = &data(&vm.five_hour).chart;
+    let start = (RESET_5H - 18_000) as f64;
+    assert_eq!(chart.target, [[start, 0.0], [RESET_5H as f64, 100.0]]);
+    assert_eq!(chart.now_s, NOW_S as f64);
+    // The seven-day window has its own line over seven days.
+    let seven = view(
+        &[record(NOW_S, None, sample(10.0, RESET_5H + 100_000))],
+        NOW_MS,
+        None,
+    );
+    let chart7 = &data(&seven.seven_day).chart;
+    assert_eq!(
+        chart7.target[0],
+        [(RESET_5H + 100_000 - 604_800) as f64, 0.0]
+    );
+    assert_eq!(chart7.target[1], [(RESET_5H + 100_000) as f64, 100.0]);
+}
+
+#[test]
+fn req_030_chart_samples_are_those_of_the_current_period_only() {
+    let old_reset = RESET_5H - 2 * 18_000;
+    let records = [
+        record(old_reset - 600, sample(90.0, old_reset), None),
+        record(NOW_S - 1_800, sample(10.0, RESET_5H), None),
+        record(NOW_S - 900, sample(120.0, RESET_5H), None),
+        record(NOW_S, sample(30.0, RESET_5H), None),
+    ];
+    let vm = view(&records, NOW_MS, None);
+    let samples = &data(&vm.five_hour).chart.samples;
+    assert_eq!(
+        samples,
+        &vec![
+            [(NOW_S - 1_800) as f64, 10.0],
+            [(NOW_S - 900) as f64, 100.0],
+            [NOW_S as f64, 30.0]
+        ],
+        "the older period is left out, 120 % is drawn as 100 %"
+    );
+}
