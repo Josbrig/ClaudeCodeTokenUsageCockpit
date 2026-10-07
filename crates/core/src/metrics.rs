@@ -96,7 +96,7 @@ pub fn rate(period: &Period, now_s: i64, rate_period_s: i64) -> Option<f64> {
         let first_ms = recent.iter().map(|s| s.0).min()?;
         recent
             .iter()
-            .map(|&&(ms, pct)| ((ms - first_ms) as f64 / MS_PER_HOUR, pct))
+            .map(|&&(ms, pct)| (ms.saturating_sub(first_ms) as f64 / MS_PER_HOUR, pct))
             .collect()
     };
     let n = samples.len() as f64;
@@ -202,7 +202,7 @@ pub fn binding(five: Option<&Forecast>, seven: Option<&Forecast>) -> Option<Wind
 /// Age of a record in whole seconds at `now_ms` (concept §7.9, REQ-009). A record that lies
 /// in the future (clock difference) has age 0.
 pub fn data_age_s(latest: &Record, now_ms: i64) -> i64 {
-    (now_ms - latest.received_at_ms).max(0) / 1000
+    now_ms.saturating_sub(latest.received_at_ms).max(0) / 1000
 }
 
 /// Whether the displayed data counts as stale (concept §7.9, REQ-009 and REQ-108).

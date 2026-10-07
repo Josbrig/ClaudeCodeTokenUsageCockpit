@@ -105,11 +105,18 @@ fn req_031_no_seeded_credentials_in_logs() {
             .success();
     }
     let files = files_below(home.path());
+    // The broken input must have produced a log line about itself, so the check is not empty.
+    let log: String = files
+        .iter()
+        .filter(|f| {
+            f.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with("log"))
+        })
+        .map(|f| fs::read_to_string(f).unwrap_or_default())
+        .collect();
     assert!(
-        files.iter().any(|f| f
-            .file_name()
-            .is_some_and(|n| n.to_string_lossy().starts_with("log"))),
-        "the broken input must have produced a log line: {files:?}"
+        log.contains("input could not be used"),
+        "no log line for the broken input: {log:?}"
     );
     for file in files {
         let bytes = fs::read(&file).unwrap();

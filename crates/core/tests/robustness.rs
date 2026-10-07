@@ -83,10 +83,9 @@ fn req_108_parser_does_not_accept_nan_like_numbers() {
         let input = format!(
             r#"{{"rate_limits":{{"five_hour":{{"used_percentage":{number},"resets_at":1738425600}}}}}}"#
         );
-        let record = parse(&input);
-        if let Some(record) = record {
-            assert_eq!(record.five_hour, None, "{number}");
-        }
+        // Either the whole input is refused or the window is left out; never a value.
+        let window = parse(&input).and_then(|record| record.five_hour);
+        assert_eq!(window, None, "{number}");
     }
 }
 
@@ -127,8 +126,27 @@ fn req_108_the_view_model_survives_extreme_values() {
             context_used_pct: None,
             cost_usd: None,
         };
-        for now_ms in [NOW_MS, 0, i64::MAX / 1000, i64::MIN / 1000] {
-            let _ = view(&[record.clone(), record.clone()], now_ms, None);
+        for received_ms in [NOW_MS, i64::MIN, i64::MAX, 0, -1] {
+            let mut odd = record.clone();
+            odd.received_at_ms = received_ms;
+            for now_ms in [
+                NOW_MS,
+                0,
+                i64::MAX,
+                i64::MIN,
+                i64::MAX / 1000,
+                i64::MIN / 1000,
+            ] {
+                let vm = view(&[record.clone(), odd.clone()], now_ms, Some(received_ms));
+                // Whatever the times are, the age text is a text of the known kinds.
+                assert!(
+                    vm.age_text.is_empty()
+                        || vm.age_text.contains("ago")
+                        || vm.age_text.contains("old"),
+                    "{}",
+                    vm.age_text
+                );
+            }
         }
     }
 }
@@ -183,4 +201,23 @@ fn req_108_view_model_keeps_last_valid_values_marked_stale_after_a_malformed_rec
         WindowView::NoData { text } => panic!("the values must stay, got: {text}"),
     }
     assert_eq!(vm.banner, None);
+}
+
+#[test]
+fn req_108_parser_takes_input_of_a_megabyte_and_more() {
+    let padding = "x".repeat(3 * 1024 * 1024);
+    let big = format!(
+        r#"{{"padding":"{padding}","rate_limits":{{"five_hour":{{"used_percentage":5,"resets_at":1738425600}}}}}}"#
+    );
+    // Size alone is no reason to refuse here; the bridge limits the input before it parses.
+    let record = parse(&big).expect("a large but valid record");
+    assert_eq!(record.five_hour.unwrap().used_pct, 5.0);
+}
+
+#[test]
+fn req_108_parser_survives_control_characters_and_lone_surrogates() {
+    let escaped = r#"{"session_id":"a\u0000b\u001f","model":{"display_name":"\ud800"}}"#;
+    let _ = parse_status_line(escaped, NOW_MS);
+    let raw = "{\"session_id\":\"\u{0}\u{7}\u{1b}[31m\"}";
+    let _ = parse_status_line(raw, NOW_MS);
 }
