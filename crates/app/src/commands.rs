@@ -18,12 +18,12 @@ pub const WINDOWS_NEEDS_YES: &str =
 
 /// `usage-cockpit setup-bridge [--yes]`.
 pub fn setup_bridge(yes: bool) -> ExitCode {
-    let Some((settings, state)) = locations() else {
-        return ExitCode::from(2);
-    };
     if let Some(code) = needs_yes(yes) {
         return code;
     }
+    let Some((settings, state)) = locations() else {
+        return ExitCode::from(2);
+    };
     let exe = match std::env::current_exe() {
         Ok(exe) => exe,
         Err(error) => return fail(&format!("cannot determine the executable path: {error}")),
@@ -47,12 +47,12 @@ pub fn setup_bridge(yes: bool) -> ExitCode {
 
 /// `usage-cockpit remove-bridge [--yes]`.
 pub fn remove_bridge(yes: bool) -> ExitCode {
-    let Some((settings, state)) = locations() else {
-        return ExitCode::from(2);
-    };
     if let Some(code) = needs_yes(yes) {
         return code;
     }
+    let Some((settings, state)) = locations() else {
+        return ExitCode::from(2);
+    };
     match setup::remove(&settings, &state, &mut ask(yes)) {
         Ok(RemoveOutcome::Removed { backup }) => {
             println!("Backup of the settings: {}", backup.display());

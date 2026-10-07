@@ -61,6 +61,12 @@ pub enum SetupError {
         #[source]
         source: serde_json::Error,
     },
+    /// `bridge-state.json` exists but cannot be used; removing the bridge would lose the
+    /// previous status line stored in it.
+    #[error(
+        "{path} cannot be used: {reason}; fix or delete it by hand, then run the command again"
+    )]
+    State { path: PathBuf, reason: String },
     /// A file operation failed.
     #[error("{path}: {source}")]
     Io {
@@ -135,7 +141,7 @@ pub fn remove(
     if !settings.get(STATUS_LINE_KEY).is_some_and(is_bridge) {
         return Ok(RemoveOutcome::NotTheBridge);
     }
-    let previous = read_previous(bridge_state);
+    let previous = read_previous(bridge_state)?;
     let plan = remove_plan(claude_settings, previous.as_ref());
     if !confirm(&plan) {
         return Ok(RemoveOutcome::Declined);
@@ -225,17 +231,24 @@ fn write_state(path: &Path, previous: Option<Value>) -> Result<(), SetupError> {
     write_atomic(path, text.as_bytes()).map_err(io_error(path))
 }
 
-/// The stored previous status line; `None` if there is none or the file cannot be used.
-fn read_previous(path: &Path) -> Option<Value> {
-    let bytes = fs::read(path).ok()?;
-    let state: Value = match serde_json::from_slice(&bytes) {
-        Ok(state) => state,
-        Err(error) => {
-            log::warn!("{} cannot be parsed: {error}", path.display());
-            return None;
-        }
+/// The stored previous status line; `None` if the file is missing or holds none. A file that
+/// exists but cannot be used is an error, so that the user's old command is not overwritten.
+fn read_previous(path: &Path) -> Result<Option<Value>, SetupError> {
+    let state_error = |reason: String| SetupError::State {
+        path: path.to_path_buf(),
+        reason,
     };
-    state.get(PREVIOUS_KEY).filter(|v| !v.is_null()).cloned()
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(state_error(error.to_string())),
+    };
+    let state: Value =
+        serde_json::from_slice(&bytes).map_err(|error| state_error(error.to_string()))?;
+    let Some(object) = state.as_object() else {
+        return Err(state_error("not a JSON object".to_owned()));
+    };
+    Ok(object.get(PREVIOUS_KEY).filter(|v| !v.is_null()).cloned())
 }
 
 /// Copies the file to `<name>.usage-cockpit-backup-<YYYYMMDD-HHMMSS>` next to it.
@@ -256,7 +269,10 @@ fn back_up(path: &Path) -> Result<PathBuf, SetupError> {
             .open(&target)
         {
             Ok(_) => {
-                fs::copy(path, &target).map_err(io_error(path))?;
+                if let Err(error) = fs::copy(path, &target) {
+                    let _ = fs::remove_file(&target);
+                    return Err(io_error(path)(error));
+                }
                 return Ok(target);
             }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
@@ -599,6 +615,22 @@ mod tests {
             assert_eq!(fs::read_to_string(&d.settings).unwrap(), text);
             assert!(!d.state.exists());
         }
+    }
+
+    #[test]
+    fn req_023_remove_refuses_a_corrupt_state_file() {
+        let d = dirs();
+        put_settings(
+            &d,
+            r#"{"statusLine":{"type":"command","command":"ccusage"}}"#,
+        );
+        setup(&d.settings, &d.exe, &d.state, &mut yes).unwrap();
+        fs::write(&d.state, "{ corrupt").unwrap();
+        let before = fs::read(&d.settings).unwrap();
+        let error = remove(&d.settings, &d.state, &mut yes).unwrap_err();
+        assert!(matches!(error, SetupError::State { .. }), "{error}");
+        assert_eq!(fs::read(&d.settings).unwrap(), before);
+        assert_eq!(fs::read_to_string(&d.state).unwrap(), "{ corrupt");
     }
 
     #[test]
