@@ -65,6 +65,12 @@ pub fn start_geometry(settings: &WindowSettings) -> (Option<[f32; 2]>, [f32; 2])
     )
 }
 
+/// Whether the inner size of `geometry` is the `expected` size, give or take a pixel.
+pub fn matches_size(geometry: &WindowSettings, expected: [f32; 2]) -> bool {
+    (geometry.width - f64::from(expected[0])).abs() <= 1.5
+        && (geometry.height - f64::from(expected[1])).abs() <= 1.5
+}
+
 /// The view that is shown at start, from the settings.
 pub fn start_view_is_detailed(settings: &Settings) -> bool {
     settings.start_view == StartView::Detailed
@@ -220,6 +226,15 @@ mod tests {
             debounce.update(start + Duration::from_secs(5), &saved, &saved),
             None
         );
+    }
+
+    #[test]
+    fn req_029_a_size_matches_the_expected_one_within_a_pixel() {
+        let size = geometry(10.0, 10.0, 520.0, 640.0);
+        assert!(matches_size(&size, [520.0, 640.0]));
+        assert!(matches_size(&size, [521.0, 639.0]));
+        assert!(!matches_size(&size, [320.0, 120.0]));
+        assert!(!matches_size(&size, [520.0, 650.0]));
     }
 
     #[test]

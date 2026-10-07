@@ -155,6 +155,9 @@ struct Cockpit {
     /// The newest geometry seen (also used when the window is closed).
     current: Option<WindowSettings>,
     debounce: Debounce,
+    /// After a switch: the size the window is expected to take, and until when the geometry
+    /// reported by the window system is ignored if it does not match yet.
+    expected: Option<([f32; 2], Instant)>,
     /// Whether the window is on top at the moment, as far as this program has set it.
     on_top: bool,
 }
@@ -175,6 +178,7 @@ impl Cockpit {
             settings_path,
             current: None,
             debounce: Debounce::default(),
+            expected: None,
         }
     }
 
@@ -191,20 +195,46 @@ impl Cockpit {
         let Some(geometry) = geometry else {
             return;
         };
+        // Right after a switch the window system still reports the size of the other view for a
+        // frame or two; that geometry must neither be saved nor kept for the exit.
+        if let Some((size, until)) = self.expected {
+            if window_state::matches_size(&geometry, size) || Instant::now() >= until {
+                self.expected = None;
+            } else {
+                return;
+            }
+        }
         self.current = Some(geometry.clone());
         if let Some(to_save) = self.debounce.update(Instant::now(), &geometry, &self.saved) {
             self.save_window(to_save);
         }
     }
 
-    /// Writes the window geometry and the current view to the settings file.
+    /// The geometry to write when the window closes: the last one seen, or, if the window was
+    /// switched and has not reported its new size yet, the default size of the shown view at the
+    /// saved position.
+    fn geometry_for_exit(&self) -> WindowSettings {
+        self.current.clone().unwrap_or_else(|| {
+            let [width, height] = self.view.size();
+            WindowSettings {
+                x: self.saved.x,
+                y: self.saved.y,
+                width: f64::from(width),
+                height: f64::from(height),
+            }
+        })
+    }
+
+    /// Writes the window geometry and the current view to the settings file. Everything else in
+    /// the file is taken from the file as it is now, so a change made there meanwhile is kept.
     fn save_window(&mut self, geometry: WindowSettings) {
-        let mut settings = self.settings.clone();
-        settings.window = geometry.clone();
-        settings.start_view = self.view.as_start_view();
-        match settings::save(&self.settings_path, &settings) {
+        let mut on_disk = settings::load(&self.settings_path);
+        on_disk.window = geometry.clone();
+        on_disk.start_view = self.view.as_start_view();
+        match settings::save(&self.settings_path, &on_disk) {
             Ok(()) => {
-                self.settings = settings;
+                self.settings.window = geometry.clone();
+                self.settings.start_view = on_disk.start_view;
                 self.saved = geometry;
             }
             Err(error) => log::warn!("the window position cannot be saved: {error}"),
@@ -232,9 +262,12 @@ impl eframe::App for Cockpit {
         });
         if switch {
             self.view = self.view.other();
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::from(
-                self.view.size(),
-            )));
+            let size = self.view.size();
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::from(size)));
+            // Forget the geometry of the other view; the new one is taken when it is reported.
+            self.current = None;
+            self.debounce = Debounce::default();
+            self.expected = Some((size, Instant::now() + Duration::from_secs(2)));
         }
         self.track_window(ctx);
         ctx.request_repaint_after(REPAINT_EVERY);
@@ -242,10 +275,9 @@ impl eframe::App for Cockpit {
 
     /// The last geometry and the view are written when the window is closed.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        let geometry = self.geometry_for_exit();
         let view_changed = self.settings.start_view != self.view.as_start_view();
-        if let Some(geometry) = self.current.clone()
-            && (geometry != self.saved || view_changed)
-        {
+        if geometry != self.saved || view_changed {
             self.save_window(geometry);
         }
     }
