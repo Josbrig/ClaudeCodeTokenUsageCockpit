@@ -6,6 +6,10 @@
 //! finding the files and reading them incrementally is done elsewhere.
 
 use std::collections::{BTreeMap, HashMap};
+use std::fs::{self, File};
+use std::io::{self, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use serde_json::Value;
@@ -174,4 +178,128 @@ fn parse_line(line: &str) -> Option<Entry> {
             cache_read: count("cache_read_input_tokens"),
         },
     })
+}
+
+/// What the scanner knows about one transcript file.
+#[derive(Debug, Default)]
+struct FileState {
+    /// Bytes up to and including the last complete line that was read.
+    offset: u64,
+    /// Modification time when the file was last read.
+    modified: Option<SystemTime>,
+    /// The entries of the file.
+    entries: Vec<Entry>,
+}
+
+/// Reads the transcript files incrementally (concept §8): a file is read again only from the
+/// place where the last scan stopped, and only up to its last complete line.
+#[derive(Debug, Default)]
+pub struct Scanner {
+    files: HashMap<PathBuf, FileState>,
+}
+
+impl Scanner {
+    /// A scanner that has seen nothing yet.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Scans `<claude_dir>/projects/**/*.jsonl` for files modified after `since`.
+    ///
+    /// A file is read from its stored offset to its last complete line, so a line that is still
+    /// being written is picked up by the next scan. A file that became shorter than the stored
+    /// offset is read again from the start and its old entries are dropped. Files that no longer
+    /// exist are forgotten. A missing `projects` folder is not an error; a file or folder that
+    /// cannot be read is logged and skipped, only the failure to list the `projects` folder
+    /// itself is returned.
+    pub fn scan(&mut self, claude_dir: &Path, since: SystemTime) -> Result<(), io::Error> {
+        let root = claude_dir.join("projects");
+        let mut found = Vec::new();
+        match collect_files(&root, since, &mut found, true) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        for (path, modified, len) in found {
+            let state = self.files.entry(path.clone()).or_default();
+            if state.modified == Some(modified) && state.offset == len {
+                continue;
+            }
+            if let Err(error) = read_new_lines(&path, state, len) {
+                log::warn!("transcript {} cannot be read: {error}", path.display());
+            } else {
+                state.modified = Some(modified);
+            }
+        }
+        self.files.retain(|path, _| path.exists());
+        Ok(())
+    }
+
+    /// Totals over everything seen so far; a message that appears in several files counts once.
+    pub fn stats<Tz: TimeZone>(&self, tz: &Tz) -> Stats {
+        let all: Vec<Entry> = self
+            .files
+            .values()
+            .flat_map(|state| state.entries.iter().cloned())
+            .collect();
+        aggregate(&all, tz)
+    }
+
+    /// Number of files the scanner keeps track of.
+    pub fn file_count(&self) -> usize {
+        self.files.len()
+    }
+}
+
+/// Lists the `.jsonl` files below `dir` that were modified after `since` with their
+/// modification time and size. `top` marks the folder whose listing errors are returned.
+fn collect_files(
+    dir: &Path,
+    since: SystemTime,
+    found: &mut Vec<(PathBuf, SystemTime, u64)>,
+    top: bool,
+) -> io::Result<()> {
+    let listing = match fs::read_dir(dir) {
+        Ok(listing) => listing,
+        Err(error) if top => return Err(error),
+        Err(error) => {
+            log::warn!("folder {} cannot be listed: {error}", dir.display());
+            return Ok(());
+        }
+    };
+    for item in listing.flatten() {
+        let path = item.path();
+        let Ok(kind) = item.file_type() else { continue };
+        if kind.is_dir() {
+            collect_files(&path, since, found, false)?;
+        } else if kind.is_file() && path.extension().is_some_and(|e| e == "jsonl") {
+            match item.metadata().and_then(|m| Ok((m.modified()?, m.len()))) {
+                Ok((modified, len)) if modified > since => found.push((path, modified, len)),
+                Ok(_) => {}
+                Err(error) => log::warn!("{} cannot be examined: {error}", path.display()),
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Reads the complete lines after `state.offset` (or all of them if the file shrank).
+fn read_new_lines(path: &Path, state: &mut FileState, len: u64) -> io::Result<()> {
+    if len < state.offset {
+        *state = FileState::default();
+    }
+    let mut file = File::open(path)?;
+    file.seek(SeekFrom::Start(state.offset))?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    // Only up to the last line break: the rest is a line that is still being written.
+    let Some(end) = bytes.iter().rposition(|&b| b == b'\n') else {
+        return Ok(());
+    };
+    let complete = &bytes[..=end];
+    state
+        .entries
+        .extend(parse_lines(&String::from_utf8_lossy(complete)));
+    state.offset += complete.len() as u64;
+    Ok(())
 }
