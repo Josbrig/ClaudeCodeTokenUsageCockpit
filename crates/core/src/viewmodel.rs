@@ -1,1 +1,239 @@
 // SPDX-License-Identifier: Apache-2.0
+//! The view model (concept §11.4): every string, number and state that the views draw.
+//!
+//! The window code only lays these out; all decisions are made and tested here. This part holds
+//! the types and the per-window values with the no-data texts; binding limit, weekly plan, data
+//! age, session, transcripts and previous periods are filled by later parts and carry their
+//! "not available" defaults until then. No GUI types appear here.
+
+use std::fmt::Display;
+
+use chrono::TimeZone;
+
+use crate::format;
+use crate::metrics::{self, PaceState};
+use crate::model::{Record, WindowKind};
+use crate::periods;
+use crate::settings::Settings;
+use crate::transcripts::Stats;
+
+/// Banner when there is no record yet (concept §11.7).
+pub const BANNER_NO_DATA_YET: &str = "No data yet. Set up the bridge and use Claude Code once.";
+/// Banner when the latest record holds neither window.
+pub const BANNER_NO_LIMITS: &str = "Claude Code sent no usage limits. They appear only for Pro and Max subscriptions, after the first response of a session.";
+/// Start of the banner when the data folder cannot be read; the path follows.
+pub const BANNER_LOAD_ERROR: &str = "Cannot read the data folder: ";
+/// Text of a window that has no value in the latest record.
+pub const WINDOW_NO_DATA: &str = "no data";
+/// Text of a window whose reset has passed without a newer record.
+pub const WINDOW_RESET_PASSED: &str = "Window reset. Waiting for new data from Claude Code.";
+
+/// Everything the view model is built from.
+pub struct Inputs<'a, Tz: TimeZone> {
+    /// Now, Unix milliseconds.
+    pub now_ms: i64,
+    /// The full history in received order.
+    pub records: &'a [Record],
+    /// Time of the newest malformed input (`last_error.json`), if any.
+    pub last_error_ms: Option<i64>,
+    /// Why the data could not be loaded (for example the data folder), if that happened.
+    pub load_error: Option<&'a str>,
+    /// The user settings.
+    pub settings: &'a Settings,
+    /// Transcript statistics, if there are any.
+    pub stats: Option<&'a Stats>,
+    /// The time zone for local times.
+    pub tz: &'a Tz,
+}
+
+/// What the views draw.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ViewModel {
+    /// A message for the whole application instead of values, if there is one.
+    pub banner: Option<String>,
+    /// The 5-hour window.
+    pub five_hour: WindowView,
+    /// The 7-day window.
+    pub seven_day: WindowView,
+    /// The window whose limit binds first (part 2).
+    pub binding: Option<WindowKind>,
+    /// Weekly plan text (part 2).
+    pub weekly_text: Option<String>,
+    /// Data age or stale marker text (part 2).
+    pub age_text: String,
+    /// Whether the data counts as stale (part 2).
+    pub stale: bool,
+    /// Details of the session (part 3).
+    pub session: SessionView,
+    /// Transcript statistics (part 3).
+    pub transcripts: TranscriptView,
+    /// Tokens per percentage point, labelled as an estimate (part 3).
+    pub estimate_text: Option<String>,
+    /// The last finished periods (part 2).
+    pub previous: Vec<PreviousPeriod>,
+}
+
+/// One window: values or the reason why there are none.
+// The shape `Data(WindowData)` is fixed by the concept; two of these are built per redraw.
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowView {
+    /// There is nothing to show; `text` says why.
+    NoData {
+        /// Plain-language reason.
+        text: String,
+    },
+    /// The values of the window.
+    Data(WindowData),
+}
+
+/// The values and texts of one window.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowData {
+    /// Used share in percent, 0 to 100 (for the bar).
+    pub used: f64,
+    /// Target share in percent, 0 to 100 (for the marker on the bar).
+    pub target: f64,
+    /// Under, on or over pace.
+    pub state: PaceState,
+    /// Glyph of the state (concept §11.1).
+    pub glyph: &'static str,
+    /// Text of the state (concept §11.1).
+    pub label: &'static str,
+    /// Whether this window's limit binds first (part 2).
+    pub binding: bool,
+    /// `62.0%`.
+    pub used_text: String,
+    /// `38.0%`.
+    pub remaining_text: String,
+    /// Reset time in the local time zone, `Mon 14:30`.
+    pub reset_local_text: String,
+    /// Time until the reset, `1h 12m`.
+    pub countdown_text: String,
+    /// `+20.0 pp`.
+    pub deviation_text: String,
+    /// `1.50×` or `–`.
+    pub factor_text: String,
+    /// `20.0 %/h` or `not available`.
+    pub rate_text: String,
+    /// `limit in 3h 0m, before reset` and the other forecast texts.
+    pub forecast_text: String,
+    /// `40.0% unused at reset` or `not available`.
+    pub unused_text: String,
+    /// The rate that uses up the quota exactly at the reset, `10.0 %/h`.
+    pub recommended_text: String,
+}
+
+/// Session details from the latest record (filled in part 3).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SessionView {}
+
+/// Transcript statistics for the detailed view (filled in part 3).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TranscriptView {}
+
+/// A finished period of a window (filled in part 2).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PreviousPeriod {}
+
+/// Glyph of a pace state (concept §11.1).
+pub fn glyph(state: PaceState) -> &'static str {
+    match state {
+        PaceState::Under => "▼",
+        PaceState::On => "●",
+        PaceState::Over => "▲",
+    }
+}
+
+/// Text of a pace state (concept §11.1).
+pub fn label(state: PaceState) -> &'static str {
+    match state {
+        PaceState::Under => "under",
+        PaceState::On => "on pace",
+        PaceState::Over => "over",
+    }
+}
+
+/// Builds the view model.
+pub fn build<Tz: TimeZone>(inputs: &Inputs<'_, Tz>) -> ViewModel
+where
+    Tz::Offset: Display,
+{
+    ViewModel {
+        banner: banner(inputs),
+        five_hour: window_view(inputs, WindowKind::FiveHour),
+        seven_day: window_view(inputs, WindowKind::SevenDay),
+        binding: None,
+        weekly_text: None,
+        age_text: String::new(),
+        stale: false,
+        session: SessionView::default(),
+        transcripts: TranscriptView::default(),
+        estimate_text: None,
+        previous: Vec::new(),
+    }
+}
+
+/// The message for the whole application, in the order of concept §11.7: a data folder that
+/// cannot be read, no record yet, a latest record without any window.
+fn banner<Tz: TimeZone>(inputs: &Inputs<'_, Tz>) -> Option<String> {
+    if let Some(error) = inputs.load_error {
+        return Some(format!("{BANNER_LOAD_ERROR}{error}"));
+    }
+    let Some(latest) = metrics::latest(inputs.records) else {
+        return Some(BANNER_NO_DATA_YET.to_owned());
+    };
+    (latest.five_hour.is_none() && latest.seven_day.is_none()).then(|| BANNER_NO_LIMITS.to_owned())
+}
+
+fn no_data(text: &str) -> WindowView {
+    WindowView::NoData {
+        text: text.to_owned(),
+    }
+}
+
+/// One window from the latest record and the current period of that window.
+fn window_view<Tz: TimeZone>(inputs: &Inputs<'_, Tz>, kind: WindowKind) -> WindowView
+where
+    Tz::Offset: Display,
+{
+    let Some(sample) = metrics::latest(inputs.records).and_then(|r| r.window(kind)) else {
+        return no_data(WINDOW_NO_DATA);
+    };
+    let now_s = inputs.now_ms.div_euclid(1000);
+    if sample.resets_at <= now_s {
+        return no_data(WINDOW_RESET_PASSED);
+    }
+    let settings = inputs.settings;
+    let basic = metrics::basic(
+        sample.used_pct,
+        sample.resets_at,
+        metrics::window_len_s(kind),
+        now_s,
+        settings.tolerance_pp,
+    );
+    let all_periods = periods::split(inputs.records, kind);
+    let rate = periods::current(&all_periods, now_s)
+        .and_then(|period| metrics::rate(period, now_s, i64::from(settings.rate_period_s)));
+    let forecast = metrics::forecast(basic.used, sample.resets_at, rate, now_s);
+    let unused = metrics::unused_at_reset(basic.used, sample.resets_at, rate, now_s);
+    let recommended = metrics::recommended_rate(basic.used, sample.resets_at, now_s);
+    WindowView::Data(WindowData {
+        used: basic.used,
+        target: basic.target,
+        state: basic.state,
+        glyph: glyph(basic.state),
+        label: label(basic.state),
+        binding: false,
+        used_text: format::pct(basic.used),
+        remaining_text: format::pct(basic.remaining),
+        reset_local_text: format::local_time(sample.resets_at, inputs.tz),
+        countdown_text: format::duration(basic.secs_to_reset),
+        deviation_text: format::deviation(basic.deviation_pp),
+        factor_text: format::factor(basic.pace_factor),
+        rate_text: format::rate(rate),
+        forecast_text: format::forecast(&forecast, now_s),
+        unused_text: format::unused(unused),
+        recommended_text: format::rate(recommended),
+    })
+}
