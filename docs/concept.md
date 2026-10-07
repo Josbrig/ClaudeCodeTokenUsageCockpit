@@ -2,6 +2,8 @@
 
 Status: draft, 2026-10-05. Implements the decisions in [ADR 0002](decisions/0002-technology-rust-egui.md) and covers the [requirements](requirements.md). Implementation issues refer to the section numbers of this document. Values marked *(proposal)* follow the requirements and change with them.
 
+> This is the design document. How the program works **as built** is described in [technical-documentation.md](technical-documentation.md); where they differ, the code and that document are right.
+
 ## 1. Overview
 
 One executable, `usage-cockpit`, with two roles:
@@ -227,7 +229,7 @@ If `R > now`: `(100 − u) / ((R − now) / 3600)` %/h, else undefined. Check: 4
 
 ### 7.7 Binding limit (REQ-008)
 
-For each window with "limit first", time to exhaustion `T100`; a window with "limit reached" counts as exhausted now. The binding limit is the window with the earlier `T100`; if neither reaches its limit before its reset, there is none. If only one window has data, there is no comparison.
+For each window with "limit first", time to exhaustion `T100`; a window with "limit reached" counts as exhausted now. The binding limit is the window with the earlier `T100` (if both are exhausted at the same moment, the 7-day window binds, because it holds you back longer); if neither reaches its limit before its reset, there is none. If only one window has data, there is no comparison.
 
 ### 7.8 Weekly planning (REQ-027)
 
@@ -239,7 +241,7 @@ age = `now − received_at` of the latest record; stale if age > 600 s *(proposa
 
 ### 7.10 Tokens per percentage point (REQ-015)
 
-For the current five-hour period: tokens (input + output + cache creation + cache read) from §8 with timestamps from the receive time of the period's first record until now ÷ (`u` now − `u` of that first record). Shown only if the denominator ≥ 1 pp and tokens > 0, always labelled "estimate".
+For the current five-hour period: tokens (input + output + cache creation + cache read) from §8 with timestamps from the receive time of the period's first record until now ÷ (the rise of the used percentage from the first to the last sample of the period). Shown only if the rise is ≥ 1 pp and tokens > 0, always labelled "estimate".
 
 ## 8. Transcript statistics (REQ-014)
 
