@@ -7,8 +7,8 @@
 use cockpit_core::format;
 use cockpit_core::model::WindowKind;
 use cockpit_core::viewmodel::{
-    NO_DATA_GLYPH, PreviousPeriod, STALE_GLYPH, STALE_LABEL, TranscriptView, UsageText, ViewModel,
-    WindowData, WindowView,
+    NO_DATA_GLYPH, PreviousPeriod, STALE_GLYPH, STALE_LABEL, TOKEN_KINDS, TranscriptView,
+    UsageText, ViewModel, WindowData, WindowView,
 };
 use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui, Vec2};
 
@@ -220,7 +220,7 @@ fn usage_grid(ui: &mut Ui, id: &str, first: &str, rows: &[(String, UsageText)]) 
         .num_columns(5)
         .striped(true)
         .show(ui, |ui| {
-            for head in [first, "Input", "Output", "Cache write", "Cache read"] {
+            for head in std::iter::once(first).chain(TOKEN_KINDS) {
                 ui.label(RichText::new(head).strong());
             }
             ui.end_row();

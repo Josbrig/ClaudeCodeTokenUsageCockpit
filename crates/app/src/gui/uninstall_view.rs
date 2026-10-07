@@ -164,7 +164,7 @@ mod tests {
             data_dir: base.join("data"),
             config_dir: base.join("config"),
             exe: base.join("usage-cockpit.exe"),
-            autostart_name: format!("UsageCockpitTest{}", std::process::id()),
+            autostart_name: format!("UsageCockpitTestView{}", std::process::id()),
         };
         fs::create_dir_all(&loc.data_dir).unwrap();
         fs::create_dir_all(&loc.config_dir).unwrap();

@@ -7,7 +7,7 @@ use std::ops::RangeInclusive;
 
 use cockpit_core::viewmodel::TOKEN_KINDS;
 use eframe::egui::{Id, RichText, Ui};
-use egui_plot::{Bar, BarChart, GridInput, GridMark, Plot};
+use egui_plot::{AxisHints, Bar, BarChart, GridInput, GridMark, Plot};
 
 use super::theme;
 
@@ -93,16 +93,24 @@ pub fn days(ui: &mut Ui, id: &str, days: &[(String, [u64; 4])], kind: Kind) {
         .include_x(-0.6)
         .include_x(count as f64 - 0.4)
         .include_y(0.0)
+        // Without this a chart of only zeros would get an axis from -17 to 17.
+        .include_y(1.0)
         .x_grid_spacer(move |_: GridInput| day_marks(count, step))
-        .x_axis_formatter(move |mark: GridMark, _range: &RangeInclusive<f64>| {
-            let position = mark.value.round();
-            if (mark.value - position).abs() < 1e-6 && position >= 0.0 {
-                labels.get(position as usize).cloned().unwrap_or_default()
-            } else {
-                String::new()
-            }
-        })
-        .y_axis_formatter(|mark: GridMark, _range: &RangeInclusive<f64>| short_count(mark.value))
+        // Labels are at least 30 points apart to be shown in full; the default would fade
+        // them out below 60 points, which a window of the normal width would reach.
+        .custom_x_axes(vec![
+            AxisHints::new_x().label_spacing(10.0..=30.0).formatter(
+                move |mark: GridMark, _range: &RangeInclusive<f64>| {
+                    let position = mark.value.round();
+                    if (mark.value - position).abs() < 1e-6 && position >= 0.0 {
+                        labels.get(position as usize).cloned().unwrap_or_default()
+                    } else {
+                        String::new()
+                    }
+                },
+            ),
+        ])
+        .y_axis_formatter(|mark: GridMark, _range: &RangeInclusive<f64>| y_label(mark.value))
         .show(ui, |plot_ui| {
             plot_ui.bar_chart(BarChart::new(kind.label(), bars).color(theme::UNDER));
         });
@@ -138,25 +146,51 @@ pub fn day_marks(count: usize, step: usize) -> Vec<GridMark> {
         .collect()
 }
 
-/// A large number in short form: `950`, `1.2 K`, `3.4 M`, `5.6 B`.
+/// A large number in short form: `950`, `1.2 K`, `3.4 M`, `5.6 B`, `2 T`. The unit is chosen
+/// after rounding, so that 999,950 is `1 M` and not `1000.0 K`. Not finite numbers give no text.
 pub fn short_count(value: f64) -> String {
+    const UNITS: [(f64, &str); 5] = [
+        (1.0, ""),
+        (1e3, " K"),
+        (1e6, " M"),
+        (1e9, " B"),
+        (1e12, " T"),
+    ];
+    if !value.is_finite() {
+        return String::new();
+    }
     let magnitude = value.abs();
-    let (scaled, suffix) = if magnitude >= 1e12 {
-        (value / 1e12, " T")
-    } else if magnitude >= 1e9 {
-        (value / 1e9, " B")
-    } else if magnitude >= 1e6 {
-        (value / 1e6, " M")
-    } else if magnitude >= 1e3 {
-        (value / 1e3, " K")
+    let mut unit = UNITS
+        .iter()
+        .rposition(|(size, _)| magnitude >= *size)
+        .unwrap_or(0);
+    loop {
+        let scaled = value / UNITS[unit].0;
+        // What would be shown as 1000 moves up to the next unit.
+        let limit = if unit == 0 { 999.5 } else { 999.95 };
+        if unit + 1 < UNITS.len() && scaled.abs() >= limit {
+            unit += 1;
+            continue;
+        }
+        let suffix = UNITS[unit].1;
+        // `+ 0.0` turns a negative zero into a plain zero.
+        return if unit == 0 {
+            format!("{:.0}", scaled + 0.0)
+        } else if (scaled - scaled.round()).abs() < 0.05 {
+            format!("{:.0}{suffix}", scaled + 0.0)
+        } else {
+            format!("{scaled:.1}{suffix}")
+        };
+    }
+}
+
+/// The text of a mark of the vertical axis: whole numbers only, since a count has no fractions
+/// (a tick at 0.5 would print as a second `0` or `1`).
+pub fn y_label(value: f64) -> String {
+    if (value - value.round()).abs() < 1e-6 {
+        short_count(value.round())
     } else {
-        return format!("{value:.0}");
-    };
-    // Whole numbers without a decimal, otherwise one: `3 M`, `1.2 K`.
-    if (scaled - scaled.round()).abs() < 0.05 {
-        format!("{:.0}{suffix}", scaled)
-    } else {
-        format!("{scaled:.1}{suffix}")
+        String::new()
     }
 }
 
@@ -175,6 +209,27 @@ mod tests {
         assert_eq!(short_count(8_627_482_138.0), "8.6 B");
         assert_eq!(short_count(2.5e12), "2.5 T");
         assert_eq!(short_count(-1_500.0), "-1.5 K");
+    }
+
+    #[test]
+    fn req_014_short_count_rounds_up_to_the_next_unit() {
+        assert_eq!(short_count(999.4), "999");
+        assert_eq!(short_count(999.5), "1 K");
+        assert_eq!(short_count(999_940.0), "999.9 K");
+        assert_eq!(short_count(999_950.0), "1 M");
+        assert_eq!(short_count(999_999_999.0), "1 B");
+        assert_eq!(short_count(999_999_999_999.0), "1 T");
+        assert_eq!(short_count(-0.0), "0");
+        assert_eq!(short_count(f64::NAN), "");
+        assert_eq!(short_count(f64::INFINITY), "");
+    }
+
+    #[test]
+    fn req_014_the_vertical_axis_shows_whole_numbers_only() {
+        assert_eq!(y_label(0.0), "0");
+        assert_eq!(y_label(2.0), "2");
+        assert_eq!(y_label(0.5), "");
+        assert_eq!(y_label(1_500_000.0), "1.5 M");
     }
 
     #[test]
