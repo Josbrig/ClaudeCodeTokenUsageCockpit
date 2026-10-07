@@ -151,15 +151,17 @@ pub fn forecast(forecast: &Forecast, now_s: i64) -> String {
 
 /// A whole number with thousands separators: `1,234,567`.
 pub fn thousands(value: u64) -> String {
-    let digits = value.to_string();
-    let mut text = String::with_capacity(digits.len() + digits.len() / 3);
-    for (i, digit) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            text.push(',');
+    let mut reversed = String::new();
+    let mut in_group = 0;
+    for digit in value.to_string().chars().rev() {
+        if in_group == 3 {
+            reversed.push(',');
+            in_group = 0;
         }
-        text.push(digit);
+        reversed.push(digit);
+        in_group += 1;
     }
-    text
+    reversed.chars().rev().collect()
 }
 
 /// An amount in US dollars with two decimals: `0.01 USD`; `–` where it is not a number.
