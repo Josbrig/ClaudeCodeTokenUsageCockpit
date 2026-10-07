@@ -270,8 +270,8 @@ Terms used below:
 - Type: non-functional (usability) · Origin: owner decision 2026-10-07 · Status: draft
 
 ### REQ-118 Optional start with the system
-- Statement: The cockpit shall offer a switch in its settings to start with the user's sign-in (desktop session), which is off by default, needs no administrator rights, can be switched off again, and shows the real state of the system entry.
-- Acceptance: Switching on creates exactly one per-user start entry for the current executable path, switching off removes it, and the first start never creates it by itself.
+- Statement: The cockpit shall offer a switch in its settings to start with the user's sign-in (desktop session), which is off by default, needs no administrator rights, can be switched off again, and shows the real state of the system entry (including a "switched off" mark that the user set in the system's list of startup apps).
+- Acceptance: Switching on creates exactly one per-user start entry for the current executable path (and clears the cockpit's own "switched off" mark of the system, if there is one), switching off removes the entry and that mark, and the first start never creates it by itself.
 - Type: functional · Origin: owner decision 2026-10-07 · Status: draft
 
 ### REQ-119 Remove everything

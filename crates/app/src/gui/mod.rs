@@ -441,7 +441,6 @@ impl eframe::App for Cockpit {
     }
 }
 
-/// The small window of a second start.
 /// The draft of the settings dialog with the real state of the start entry.
 fn new_draft(settings: &Settings) -> settings_view::Draft {
     let mut draft = settings_view::Draft::from_settings(settings);
@@ -459,19 +458,29 @@ fn new_draft(settings: &Settings) -> settings_view::Draft {
 /// Switches the start entry on or off and shows the state the system has afterwards.
 fn change_autostart(draft: &mut settings_view::Draft, on: bool) {
     draft.autostart_error = None;
-    match std::env::current_exe()
-        .map_err(|error| format!("cannot determine the executable path: {error}"))
-        .and_then(|exe| autostart::set(&exe, on))
+    let exe = std::env::current_exe()
+        .map_err(|error| format!("cannot determine the executable path: {error}"));
+    match exe
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|exe| autostart::set(exe, on))
     {
         Ok(state) => draft.autostart = Some(state),
         Err(message) => {
             log::warn!("the start entry cannot be changed: {message}");
             draft.autostart_error =
                 Some(format!("The start entry could not be changed: {message}"));
+            // A failure half way may still have changed the system: show what is there now.
+            if let Ok(exe) = &exe
+                && let Ok(state) = autostart::state(exe)
+            {
+                draft.autostart = Some(state);
+            }
         }
     }
 }
 
+/// The small window of a second start.
 struct AlreadyRunning;
 
 impl eframe::App for AlreadyRunning {
