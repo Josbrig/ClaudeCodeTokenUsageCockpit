@@ -37,8 +37,8 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-031 Logging | #26, #60 | – | – | approved |
 | REQ-032 Version information | #24, #51 | – | – | approved |
 | REQ-033 Single instance | #48 | – | – | approved |
-| REQ-101 Single executable | #57, #65, #66, #67 | – | – | approved |
-| REQ-102 Target platforms | #23, #47, #57, #65, #66, #67 | – | – | approved |
+| REQ-101 Single executable | #57, #65, #66, #67, #154 | – | – | approved |
+| REQ-102 Target platforms | #23, #47, #57, #65, #66, #67, #154 | – | – | approved |
 | REQ-103 Local operation | #62 | – | – | approved |
 | REQ-104 Credential handling | #60 | – | – | approved |
 | REQ-105 Resource usage | #42, #49, #61, #69 | – | – | approved |
@@ -47,7 +47,7 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-108 Robustness against format changes | #28, #29, #30, #45, #60 | – | – | approved |
 | REQ-109 Bridge speed and fallback output | #30, #31, #61, #69 | – | – | approved |
 | REQ-110 Automated tests | #22, #23, #63 | – | – | approved |
-| REQ-111 Release builds in CI | #57, #71 | – | – | approved |
+| REQ-111 Release builds in CI | #57, #71, #154 | – | – | approved |
 | REQ-112 User documentation | #59, #141, #142, #151 | PR #146 | `req_112_*` (`crates/core/tests/user_guide.rs`, `crates/app/tests/user_guide_labels.rs`) | approved |
 | REQ-113 Display scaling | #68 | – | – | approved |
 | REQ-114 Colour-independent states | #44, #50, #68 | – | – | approved |
