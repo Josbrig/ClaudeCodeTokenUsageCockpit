@@ -217,3 +217,32 @@ fn req_117_the_bridge_runs_from_a_folder_with_a_space() {
             .is_none()
     );
 }
+
+// The quoting of the command for `sh -c` (Linux and macOS) is checked against a real POSIX shell:
+// Git for Windows bash reads single quotes the way `sh` does. The module is the same file that the
+// program uses.
+#[allow(dead_code)]
+#[path = "../src/quoting.rs"]
+mod quoting;
+
+#[cfg(windows)]
+#[test]
+fn req_117_a_sh_quoted_command_runs_from_a_folder_with_a_space_a_quote_and_a_dollar_sign() {
+    let Some(bash) = git_bash() else {
+        eprintln!("Git for Windows bash not found: this test is skipped");
+        return;
+    };
+    let home = tempfile::tempdir().unwrap();
+    let folder = home.path().join("it's my $tools");
+    fs::create_dir_all(&folder).unwrap();
+    let exe = folder.join("usage-cockpit.exe");
+    fs::copy(assert_cmd::cargo::cargo_bin!("usage-cockpit"), &exe).unwrap();
+    let path = exe.to_string_lossy().replace('\\', "/");
+    let command = format!("{} bridge", quoting::sh_quote(&path));
+    assert!(command.starts_with('\''), "{command}");
+    assert_eq!(
+        run_in_bash(&bash, &command, home.path()).trim(),
+        "5h 23.5% \u{b7} 7d 41.2%",
+        "command: {command}"
+    );
+}

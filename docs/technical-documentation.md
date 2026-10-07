@@ -81,6 +81,7 @@ A Cargo workspace with two crates:
 | `bridge` | Bridge mode (section 4). |
 | `shell` | Runs the *kept* status line command through the shell Claude Code would use, with a timeout. |
 | `setup` | Sets the bridge up and removes it in the Claude Code settings (section 7). |
+| `quoting` | Quoting of the bridge command for `sh -c` and reading it back; no dependencies, compiled everywhere. |
 | `commands` | The command line side of setup, removal and uninstall: asking, printing, exit codes. |
 | `autostart` | The start entry of the system (section 7.3). |
 | `uninstall` | *Remove everything* (section 7.4). |
@@ -208,12 +209,12 @@ The program is **portable**: it installs nothing, so until the person asks, it c
 
 `setup` takes every path and the consent as arguments (`confirm: &mut dyn FnMut(&str) -> bool`), so the command line and the window use the same code and tests need no global state.
 
-1. Build the command from the path of the running executable with forward slashes: `<path> bridge`. For a path with a space: on Windows the **8.3 short name of the folder** is used (the file name stays, because the removal recognises the bridge by the name `usage-cockpit[.exe]`), or, if the volume has no short names, the whole path in double quotes (Git Bash and cmd accept that, PowerShell does not). On other systems such a path is still refused (own issues).
+1. Build the command from the path of the running executable with forward slashes: `<path> bridge`. For a path with a space: on Windows the **8.3 short name of the folder** is used (the file name stays, because the removal recognises the bridge by the name `usage-cockpit[.exe]`), or, if the volume has no short names, the whole path in double quotes (Git Bash and cmd accept that, PowerShell does not). On Linux and macOS the path is quoted for `sh -c` whenever `sh` would read it differently (space, quote, dollar sign and so on; a plain path stays as it is): single quotes, with a single quote inside written as `'\''` (`quoting.rs`, a file without dependencies on the rest of the program that is compiled and tested on every system). This was checked against a real POSIX shell (Git for Windows bash) with a folder name containing a space, an apostrophe and a dollar sign; it was **not tried on Linux or macOS**.
 2. Read the settings (a missing file is fine, a file that is not a JSON object is an error and nothing is changed). If `statusLine` already is exactly this command, report *already set up*.
 3. Give the planned change as text to `confirm`. A *no* leaves the file byte-identical.
 4. Make the backup (if the file exists), keep a replaced status line in `bridge-state.json` (an old bridge entry from another folder does not count as "previous"), set `statusLine` to `{"type":"command","command":"<path> bridge"}` and write the file atomically.
 
-`remove` is the reverse: if the current `statusLine` is the bridge (`is_bridge`: type `command`, a command of the form `<path> bridge` with or without quotes, whose program is named `usage-cockpit` or `usage-cockpit.exe`), it asks, makes a backup, puts the stored status line back (or removes the key if there was none) and clears the stored value. A corrupt `bridge-state.json` makes it refuse (it holds the person's old status line).
+`remove` is the reverse: if the current `statusLine` is the bridge (`is_bridge`: type `command`, a command of the form `<path> bridge`, the path read the way a shell reads the first word (`quoting::first_word`: plain, in double quotes, or in single quotes), whose program is named `usage-cockpit` or `usage-cockpit.exe`), it asks, makes a backup, puts the stored status line back (or removes the key if there was none) and clears the stored value. A corrupt `bridge-state.json` makes it refuse (it holds the person's old status line).
 
 The window cannot wait inside a callback. `bridge_view` therefore calls `setup` **twice**: first with a callback that only keeps the plan text and says no; after the person's *yes* a second time with a callback that accepts only the same plan. If the settings changed in between, the plan differs and nothing is changed.
 

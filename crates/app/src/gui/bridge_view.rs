@@ -302,31 +302,6 @@ mod tests {
         ));
     }
 
-    #[cfg(not(windows))]
-    #[test]
-    fn req_023_a_path_with_a_space_is_explained_and_nothing_is_changed() {
-        let mut f = fixture();
-        put(&f.paths, &json!({"a": 1}));
-        f.paths.exe = f
-            .paths
-            .exe
-            .parent()
-            .unwrap()
-            .join("with space")
-            .join("usage-cockpit");
-        let before = fs::read(&f.paths.settings).unwrap();
-        let Stage::Done(text) = prepare(Kind::Setup, &f.paths).stage else {
-            panic!("a path with a space must stop at once");
-        };
-        assert!(text.contains("without spaces"), "{text}");
-        let message = perform(Kind::Setup, &f.paths, "any plan");
-        assert!(
-            message.starts_with("The bridge could not be set up:"),
-            "{message}"
-        );
-        assert_eq!(fs::read(&f.paths.settings).unwrap(), before);
-    }
-
     #[test]
     fn req_023_unusable_settings_are_reported_in_words() {
         let f = fixture();

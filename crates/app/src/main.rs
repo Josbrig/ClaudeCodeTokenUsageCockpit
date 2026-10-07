@@ -8,6 +8,7 @@ mod commands;
 mod console;
 mod gui;
 mod instance;
+mod quoting;
 mod setup;
 mod shell;
 mod uninstall;
