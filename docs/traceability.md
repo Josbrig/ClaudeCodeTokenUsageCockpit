@@ -26,7 +26,7 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-020 Bridge record hand-over | #25, #29, #30 | – | – | approved |
 | REQ-021 Usage rate from the current window | #36 | – | – | approved |
 | REQ-022 Window reset detection | #34 | – | – | approved |
-| REQ-023 Bridge setup and removal | #32, #55 | – | – | approved |
+| REQ-023 Bridge setup and removal | #32, #55, #120 | – | – | approved |
 | REQ-024 Settings | #25, #27, #54 | – | – | approved |
 | REQ-025 History retention | #33, #56 | – | – | approved |
 | REQ-026 Time display | #40 | – | – | approved |
@@ -53,3 +53,6 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-114 Colour-independent states | #44, #50, #68 | – | – | approved |
 | REQ-115 Data format versioning | #27, #29 | – | – | approved |
 | REQ-116 Start-up time | #61, #69 | – | – | approved |
+| REQ-117 Portable use | #120, #123, #125, #130 | – | – | draft |
+| REQ-118 Optional start with the system | #121, #126, #131 | – | – | draft |
+| REQ-119 Remove everything | #122, #127, #132 | – | – | draft |
