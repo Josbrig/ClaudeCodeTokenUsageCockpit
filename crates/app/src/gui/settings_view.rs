@@ -10,6 +10,8 @@ use cockpit_core::settings::{
 };
 use eframe::egui::{self, Color32, Context, TextEdit, Ui};
 
+use crate::autostart::State as AutostartState;
+
 /// What the person did in the dialog.
 #[derive(Debug, PartialEq)]
 pub enum Outcome {
@@ -19,6 +21,9 @@ pub enum Outcome {
     Save(Values),
     /// "Cancel" or the close button.
     Cancel,
+    /// The start entry of the system was switched on (`true`) or off at once; unlike the other
+    /// values it does not wait for "Save", because it is not part of the settings file.
+    Autostart(bool),
 }
 
 /// A valid set of the values the dialog edits.
@@ -62,6 +67,10 @@ pub struct Draft {
     pub start_view: StartView,
     /// Why the last attempt to save failed, shown in the dialog until the next attempt.
     pub save_error: Option<String>,
+    /// The real state of the start entry; `None` where the system has no such switch.
+    pub autostart: Option<AutostartState>,
+    /// Why the start entry could not be read or changed.
+    pub autostart_error: Option<String>,
 }
 
 /// Which field has a problem and what it is.
@@ -83,6 +92,8 @@ impl Draft {
             always_on_top: settings.always_on_top,
             start_view: settings.start_view,
             save_error: None,
+            autostart: None,
+            autostart_error: None,
         }
     }
 
@@ -191,6 +202,7 @@ pub fn show(ctx: &Context, draft: &mut Draft) -> Outcome {
                     });
                     ui.end_row();
                 });
+            autostart_row(ui, draft, &mut outcome);
             if let Err(errors) = &validation {
                 ui.add_space(4.0);
                 for error in errors {
@@ -222,6 +234,41 @@ pub fn show(ctx: &Context, draft: &mut Draft) -> Outcome {
     outcome
 }
 
+/// The switch for the start entry of the system, with what is wrong with it, if anything.
+fn autostart_row(ui: &mut Ui, draft: &Draft, outcome: &mut Outcome) {
+    let warning = Color32::from_rgb(0xD5, 0x5E, 0x00);
+    if let Some(message) = &draft.autostart_error {
+        ui.add_space(4.0);
+        ui.colored_label(warning, message);
+    }
+    let Some(state) = &draft.autostart else {
+        return;
+    };
+    ui.add_space(4.0);
+    let mut on = matches!(state, AutostartState::On | AutostartState::Stale { .. });
+    if ui
+        .checkbox(&mut on, "Start with Windows (when you sign in)")
+        .changed()
+    {
+        *outcome = Outcome::Autostart(on);
+    }
+    match state {
+        AutostartState::Stale { found } => {
+            ui.colored_label(warning, format!("The entry starts another file: {found}"));
+            if ui.button("Use this file").clicked() {
+                *outcome = Outcome::Autostart(true);
+            }
+        }
+        AutostartState::SwitchedOffInWindows => {
+            ui.colored_label(
+                warning,
+                "Switched off in the Windows list of startup apps. Ticking the box switches it on again.",
+            );
+        }
+        AutostartState::On | AutostartState::Off | AutostartState::Unsupported => {}
+    }
+}
+
 fn text_field(ui: &mut Ui, text: &mut String) {
     ui.add(TextEdit::singleline(text).desired_width(90.0));
 }
@@ -238,6 +285,8 @@ mod tests {
             always_on_top: true,
             start_view: StartView::Compact,
             save_error: None,
+            autostart: None,
+            autostart_error: None,
         }
     }
 
