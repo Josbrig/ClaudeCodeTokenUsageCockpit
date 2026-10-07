@@ -240,13 +240,18 @@ impl Scanner {
     /// The files are taken in the order of their paths, so if two files hold the same message
     /// with different counts the one in the later path wins, the same way every time.
     pub fn stats<Tz: TimeZone>(&self, tz: &Tz) -> Stats {
+        aggregate(&self.entries(), tz)
+    }
+
+    /// All entries seen so far, without duplicates, in the order of the file paths.
+    pub fn entries(&self) -> Vec<Entry> {
         let mut paths: Vec<&PathBuf> = self.files.keys().collect();
         paths.sort();
-        let all: Vec<Entry> = paths
+        let all = paths
             .into_iter()
             .flat_map(|path| self.files[path].entries.iter().cloned())
             .collect();
-        aggregate(&all, tz)
+        dedupe(all)
     }
 
     /// Number of files the scanner keeps track of.

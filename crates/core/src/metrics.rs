@@ -4,6 +4,7 @@
 
 use crate::model::{Record, WindowKind};
 use crate::periods::Period;
+use crate::transcripts::Entry;
 
 /// Length of the 5-hour window in seconds.
 pub const FIVE_HOUR_S: i64 = 18_000;
@@ -221,4 +222,36 @@ pub fn is_stale(
 /// With equal receive times the later one in the list wins.
 pub fn latest(records: &[Record]) -> Option<&Record> {
     records.iter().max_by_key(|r| r.received_at_ms)
+}
+
+/// Tokens that one percentage point of the window cost in this period (concept §7.10, REQ-015).
+///
+/// `tokens_in_period` are the tokens used since the first record of the period (see
+/// [`tokens_in_period`]); they are divided by the rise of the used share from the first to the
+/// last sample. `None` if the rise is below 1 percentage point or there were no tokens. The
+/// result is an estimate and must be shown as such.
+pub fn tokens_per_pp(period: &Period, tokens_in_period: u64) -> Option<f64> {
+    let first = period.samples.first()?.1;
+    let last = period.samples.last()?.1;
+    let rise = last - first;
+    (rise >= 1.0 && tokens_in_period > 0).then(|| tokens_in_period as f64 / rise)
+}
+
+/// Input, output, cache creation and cache read tokens of the entries written from the receive
+/// time of the first sample of `period` until `now_ms` (both ends included); `0` for a period
+/// without samples. The entries must not contain duplicates (see `transcripts::dedupe`).
+pub fn tokens_in_period(entries: &[Entry], period: &Period, now_ms: i64) -> u64 {
+    let Some(&(from_ms, _)) = period.samples.first() else {
+        return 0;
+    };
+    entries
+        .iter()
+        .filter(|e| (from_ms..=now_ms).contains(&e.timestamp.timestamp_millis()))
+        .fold(0u64, |sum, e| {
+            let u = &e.usage;
+            sum.saturating_add(u.input)
+                .saturating_add(u.output)
+                .saturating_add(u.cache_creation)
+                .saturating_add(u.cache_read)
+        })
 }
