@@ -1,23 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The cockpit window (concept §11). This is the skeleton that proves the choice of ADR 0002:
-//! a small window that stays on top of other windows. Real content follows in later issues.
+//! The cockpit window (concept §11): the compact and the detailed view, switching between them,
+//! and keeping position, size, view and level of the window across runs.
 //!
 //! Only `main` calls into this module; the bridge never does (see the test in `main.rs`), so the
 //! bridge starts without any GUI code running.
 
-use std::path::Path;
-use std::time::Duration;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use cockpit_core::paths;
-use cockpit_core::settings::Settings;
+use cockpit_core::settings::{self, Settings, StartView, WindowSettings};
 use eframe::egui::{self, Vec2};
 
 mod compact;
 mod detailed;
 mod state;
 mod theme;
+mod window_state;
 
 use state::AppState;
+use window_state::Debounce;
 
 /// Default size of the compact view in logical pixels (concept §11.2).
 pub const DEFAULT_SIZE: [f32; 2] = [320.0, 120.0];
@@ -31,26 +33,27 @@ pub const TITLE: &str = "usage-cockpit";
 pub const REPAINT_EVERY: Duration = Duration::from_secs(1);
 
 /// Opens the window and runs until it is closed. `data_dir` is where the bridge stores the
-/// records.
-pub fn run(settings: &Settings, data_dir: &Path) -> eframe::Result<()> {
+/// records, `settings_path` the file the window position, size and view are saved to.
+pub fn run(settings: &Settings, settings_path: &Path, data_dir: &Path) -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: viewport(settings),
         ..Default::default()
     };
     let settings = settings.clone();
+    let settings_path = settings_path.to_path_buf();
     let data_dir = data_dir.to_path_buf();
     eframe::run_native(
         TITLE,
         options,
         Box::new(move |creation_context| {
             let context = creation_context.egui_ctx.clone();
-            let state = AppState::new(&data_dir, settings, paths::claude_dir(), move || {
-                context.request_repaint()
-            });
-            Ok(Box::new(Cockpit {
-                state,
-                view: View::Compact,
-            }))
+            let state = AppState::new(
+                &data_dir,
+                settings.clone(),
+                paths::claude_dir(),
+                move || context.request_repaint(),
+            );
+            Ok(Box::new(Cockpit::new(state, settings, settings_path)))
         }),
     )
 }
@@ -72,16 +75,19 @@ pub fn show_already_running() -> eframe::Result<()> {
     )
 }
 
-/// The window settings: size and, if the settings ask for it, always on top.
+/// The window at start: the saved position and size and, if the settings ask for it, on top.
 fn viewport(settings: &Settings) -> egui::ViewportBuilder {
-    let builder = egui::ViewportBuilder::default()
+    let (position, size) = window_state::start_geometry(&settings.window);
+    let mut builder = egui::ViewportBuilder::default()
         .with_title(TITLE)
-        .with_inner_size(DEFAULT_SIZE);
-    if settings.always_on_top {
-        builder.with_always_on_top()
-    } else {
-        builder
+        .with_inner_size(size);
+    if let Some(position) = position {
+        builder = builder.with_position(position);
     }
+    if settings.always_on_top {
+        builder = builder.with_always_on_top();
+    }
+    builder
 }
 
 /// `true` when a plain `D` was pressed in this frame: no Ctrl, Alt or Shift, no key repeat (a
@@ -127,17 +133,127 @@ impl View {
             Self::Detailed => detailed::DEFAULT_SIZE,
         }
     }
+
+    /// The setting that stands for this view.
+    fn as_start_view(self) -> StartView {
+        match self {
+            Self::Compact => StartView::Compact,
+            Self::Detailed => StartView::Detailed,
+        }
+    }
 }
 
-/// The window: the data and what the view model says about it.
+/// The window: the data and what the view model says about it, and what is kept of the window
+/// itself.
 struct Cockpit {
     state: AppState,
     view: View,
+    settings: Settings,
+    settings_path: PathBuf,
+    /// The geometry the settings file holds.
+    saved: WindowSettings,
+    /// The newest geometry seen (also used when the window is closed).
+    current: Option<WindowSettings>,
+    debounce: Debounce,
+    /// After a switch: the size the window is expected to take, and until when the geometry
+    /// reported by the window system is ignored if it does not match yet.
+    expected: Option<([f32; 2], Instant)>,
+    /// Whether the window is on top at the moment, as far as this program has set it.
+    on_top: bool,
+}
+
+impl Cockpit {
+    fn new(state: AppState, settings: Settings, settings_path: PathBuf) -> Self {
+        let view = if window_state::start_view_is_detailed(&settings) {
+            View::Detailed
+        } else {
+            View::Compact
+        };
+        Self {
+            state,
+            view,
+            saved: settings.window.clone(),
+            on_top: settings.always_on_top,
+            settings,
+            settings_path,
+            current: None,
+            debounce: Debounce::default(),
+            expected: None,
+        }
+    }
+
+    /// Follows position and size of the window and writes them after a quiet second.
+    fn track_window(&mut self, ctx: &egui::Context) {
+        let geometry = ctx.input(|input| {
+            let viewport = input.viewport();
+            window_state::geometry_from(
+                viewport.outer_rect,
+                viewport.inner_rect,
+                viewport.minimized.unwrap_or(false),
+            )
+        });
+        let Some(geometry) = geometry else {
+            return;
+        };
+        // Right after a switch the window system still reports the size of the other view for a
+        // frame or two; that geometry must neither be saved nor kept for the exit.
+        if let Some((size, until)) = self.expected {
+            if window_state::matches_size(&geometry, size) || Instant::now() >= until {
+                self.expected = None;
+            } else {
+                return;
+            }
+        }
+        self.current = Some(geometry.clone());
+        if let Some(to_save) = self.debounce.update(Instant::now(), &geometry, &self.saved) {
+            self.save_window(to_save);
+        }
+    }
+
+    /// The geometry to write when the window closes: the last one seen, or, if the window was
+    /// switched and has not reported its new size yet, the default size of the shown view at the
+    /// saved position.
+    fn geometry_for_exit(&self) -> WindowSettings {
+        self.current.clone().unwrap_or_else(|| {
+            let [width, height] = self.view.size();
+            WindowSettings {
+                x: self.saved.x,
+                y: self.saved.y,
+                width: f64::from(width),
+                height: f64::from(height),
+            }
+        })
+    }
+
+    /// Writes the window geometry and the current view to the settings file. Everything else in
+    /// the file is taken from the file as it is now, so a change made there meanwhile is kept.
+    fn save_window(&mut self, geometry: WindowSettings) {
+        let mut on_disk = settings::load(&self.settings_path);
+        on_disk.window = geometry.clone();
+        on_disk.start_view = self.view.as_start_view();
+        match settings::save(&self.settings_path, &on_disk) {
+            Ok(()) => {
+                self.settings.window = geometry.clone();
+                self.settings.start_view = on_disk.start_view;
+                self.saved = geometry;
+            }
+            Err(error) => log::warn!("the window position cannot be saved: {error}"),
+        }
+    }
+
+    /// Applies the setting "always on top" when it differs from what the window has.
+    fn apply_level(&mut self, ctx: &egui::Context) {
+        if let Some(level) = window_state::level_command(self.on_top, self.settings.always_on_top) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
+            self.on_top = self.settings.always_on_top;
+        }
+    }
 }
 
 impl eframe::App for Cockpit {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.drain();
+        self.apply_level(ctx);
         let model = self.state.view_model_now();
         let mut switch = false;
         egui::CentralPanel::default().show(ctx, |ui| match self.view {
@@ -145,14 +261,25 @@ impl eframe::App for Cockpit {
             View::Detailed => switch = detailed::show(ui, model).switch_view,
         });
         if switch {
-            // Only the plain switch with the default size of each view; remembering the view
-            // and the window position comes with the settings issue.
             self.view = self.view.other();
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::from(
-                self.view.size(),
-            )));
+            let size = self.view.size();
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::from(size)));
+            // Forget the geometry of the other view; the new one is taken when it is reported.
+            self.current = None;
+            self.debounce = Debounce::default();
+            self.expected = Some((size, Instant::now() + Duration::from_secs(2)));
         }
+        self.track_window(ctx);
         ctx.request_repaint_after(REPAINT_EVERY);
+    }
+
+    /// The last geometry and the view are written when the window is closed.
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        let geometry = self.geometry_for_exit();
+        let view_changed = self.settings.start_view != self.view.as_start_view();
+        if geometry != self.saved || view_changed {
+            self.save_window(geometry);
+        }
     }
 }
 
