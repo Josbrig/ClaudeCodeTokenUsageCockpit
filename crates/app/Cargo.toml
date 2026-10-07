@@ -15,6 +15,7 @@ chrono = "0.4.45"
 clap = { version = "4.6.7", features = ["derive"] }
 cockpit-core = { version = "0.1.0", path = "../core" }
 eframe = "0.33.3"
+egui_plot = "0.34.1"
 log = { version = "0.4.34", features = ["std"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 thiserror = "2.0.21"

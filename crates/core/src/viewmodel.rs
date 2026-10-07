@@ -123,6 +123,8 @@ pub struct WindowData {
     pub unused_text: String,
     /// The rate that uses up the quota exactly at the reset, `10.0 %/h`.
     pub recommended_text: String,
+    /// What the history chart of the window draws.
+    pub chart: ChartData,
 }
 
 /// Heading of the session details.
@@ -133,6 +135,19 @@ pub const SESSION_NO_DATA: &str = "no data";
 pub const TRANSCRIPTS_NOT_AVAILABLE: &str = "transcript statistics not available";
 /// How many days the transcript table shows at most.
 pub const MAX_TRANSCRIPT_DAYS: usize = 35;
+
+/// The data of the history chart of one window (concept §11.3, item 3): the samples of the
+/// current period, the line of an even pace, and now. Times are Unix seconds, shares percent.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChartData {
+    /// `[time, used share]` of the samples of the current period, oldest first, shares held
+    /// between 0 and 100.
+    pub samples: Vec<[f64; 2]>,
+    /// The line of an even pace: from (start of the period, 0) to (reset, 100).
+    pub target: [[f64; 2]; 2],
+    /// The time now.
+    pub now_s: f64,
+}
 
 /// Session details from the latest record (concept §11.3, item 4).
 #[derive(Debug, Clone, PartialEq)]
@@ -208,6 +223,25 @@ pub struct PreviousPeriod {
 
 /// How many finished periods are listed per window.
 pub const PREVIOUS_PERIODS_PER_WINDOW: usize = 3;
+
+/// The chart data of a window from its current period (`None`: no samples).
+fn chart_data(period: Option<&Period>, resets_at: i64, window_len_s: i64, now_s: i64) -> ChartData {
+    let start_s = resets_at.saturating_sub(window_len_s);
+    ChartData {
+        samples: period
+            .map(|p| {
+                p.samples
+                    .iter()
+                    .map(|&(received_ms, used)| {
+                        [received_ms as f64 / 1000.0, used.clamp(0.0, 100.0)]
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        target: [[start_s as f64, 0.0], [resets_at as f64, 100.0]],
+        now_s: now_s as f64,
+    }
+}
 
 /// Glyph of the stale marker (concept §11.1).
 pub const STALE_GLYPH: &str = "⏸";
@@ -471,6 +505,12 @@ where
         forecast_text: format::forecast(&forecast, now_s),
         unused_text: format::unused(unused),
         recommended_text: format::rate(recommended),
+        chart: chart_data(
+            periods::current(&all_periods, now_s),
+            sample.resets_at,
+            metrics::window_len_s(kind),
+            now_s,
+        ),
     });
     (view, Some(forecast))
 }
