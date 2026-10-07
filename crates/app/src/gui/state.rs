@@ -21,6 +21,8 @@ use cockpit_core::viewmodel::{Inputs, ViewModel, build};
 pub const POLL_EVERY: Duration = Duration::from_millis(500);
 /// How often the transcript files are scanned.
 pub const SCAN_EVERY: Duration = Duration::from_secs(60);
+/// How often the history is pruned.
+pub const PRUNE_EVERY: Duration = Duration::from_secs(3600);
 /// Temp files older than this are removed at start.
 pub const TEMP_FILE_AGE: Duration = Duration::from_secs(60);
 /// How many of the newest records are compared to avoid taking one record in twice.
@@ -127,6 +129,34 @@ pub fn spawn_scanner(
     })
 }
 
+/// Runs `action` at once and then every `interval` on its own thread, until it returns `false`.
+pub fn spawn_every(
+    interval: Duration,
+    mut action: impl FnMut() -> bool + Send + 'static,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        while action() {
+            thread::sleep(interval);
+        }
+    })
+}
+
+/// Prunes the history with the default limits at once and then every `interval`, and logs what
+/// each run did.
+pub fn spawn_pruner(dir: PathBuf, interval: Duration) -> JoinHandle<()> {
+    spawn_every(interval, move || {
+        match store::prune_history_default(&dir, Utc::now().timestamp_millis()) {
+            Ok(stats) => log::info!(
+                "history pruned: removed {}, kept {}",
+                stats.removed,
+                stats.kept
+            ),
+            Err(error) => log::warn!("the history cannot be pruned: {error}"),
+        }
+        true
+    })
+}
+
 /// The data of the window: records and the time of the last malformed input.
 #[derive(Debug, Default)]
 pub struct Model {
@@ -193,6 +223,7 @@ impl AppState {
         // reported as new and de-duplicated by `Model::apply`.
         let (event_tx, events) = mpsc::channel();
         spawn_poller(data_dir, event_tx, wake.clone());
+        spawn_pruner(data_dir.to_path_buf(), PRUNE_EVERY);
         let (stats_tx, stats_in) = mpsc::channel();
         if let Some(dir) = claude_dir {
             spawn_scanner(dir, stats_tx, wake);
@@ -459,5 +490,49 @@ mod tests {
             thread::sleep(Duration::from_millis(50));
         }
         assert_eq!(state.view_model(1_738_400_001_000).banner, None);
+    }
+
+    #[test]
+    fn req_025_scheduler_calls_the_action_at_once_and_repeatedly() {
+        let count = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&count);
+        spawn_every(Duration::from_millis(40), move || {
+            counter.fetch_add(1, Ordering::SeqCst) < 4
+        });
+        // The first call comes at once, before the first pause of 40 ms is over.
+        thread::sleep(Duration::from_millis(15));
+        assert!(count.load(Ordering::SeqCst) >= 1);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while count.load(Ordering::SeqCst) < 5 {
+            assert!(Instant::now() < deadline, "the action was not repeated");
+            thread::sleep(Duration::from_millis(10));
+        }
+        // It returned false on the fifth call: no more calls after that.
+        thread::sleep(Duration::from_millis(150));
+        assert_eq!(count.load(Ordering::SeqCst), 5);
+    }
+
+    #[test]
+    fn req_025_scheduler_calls_prune() {
+        let dir = tempfile::tempdir().unwrap();
+        let now_ms = Utc::now().timestamp_millis();
+        let day_ms = 86_400_000;
+        let old = record(now_ms - 40 * day_ms, 10.0);
+        let recent = record(now_ms - 1_000, 20.0);
+        for r in [&old, &recent] {
+            store::append_history(dir.path(), r, Duration::from_secs(1)).unwrap();
+        }
+        assert_eq!(store::read_history(dir.path()).unwrap().records.len(), 2);
+        spawn_pruner(dir.path().to_path_buf(), Duration::from_millis(50));
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            let left = store::read_history(dir.path()).unwrap().records;
+            if left.len() == 1 {
+                assert_eq!(left[0], recent, "only the old record is removed");
+                break;
+            }
+            assert!(Instant::now() < deadline, "the history was not pruned");
+            thread::sleep(Duration::from_millis(25));
+        }
     }
 }
