@@ -187,6 +187,12 @@ fn transcript_section(ui: &mut Ui, view: &ViewModel) {
     if !t.available {
         ui.label(&t.cache_share_text);
     } else {
+        let kind = bars::choice(ui);
+        ui.add_space(4.0);
+        if !t.per_model_numbers.is_empty() {
+            bars::models(ui, "per_model_chart", &t.per_model_numbers, kind);
+            ui.add_space(4.0);
+        }
         ui.label("Per model");
         if t.per_model.is_empty() {
             ui.label("no data");
@@ -195,7 +201,6 @@ fn transcript_section(ui: &mut Ui, view: &ViewModel) {
         }
         ui.add_space(4.0);
         if !t.per_day_numbers.is_empty() {
-            let kind = bars::choice(ui);
             bars::days(ui, "per_day_chart", &t.per_day_numbers, kind);
             ui.add_space(4.0);
         }
