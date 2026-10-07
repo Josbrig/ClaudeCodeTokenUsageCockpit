@@ -66,6 +66,9 @@ pub fn show(ui: &mut Ui, view: &ViewModel) -> Action {
                 ui.label(RichText::new(banner).strong());
                 ui.separator();
             }
+            if !view.age_text.is_empty() {
+                ui.label(&view.age_text);
+            }
             window_section(ui, "5-hour window", &view.five_hour, view.stale);
             window_section(ui, "7-day window", &view.seven_day, view.stale);
             planning_section(ui, view);
@@ -74,9 +77,7 @@ pub fn show(ui: &mut Ui, view: &ViewModel) -> Action {
             previous_section(ui, view);
             footer(ui, &mut action);
         });
-    // Only a plain D: not with Ctrl, Alt or Shift, and not while a text field has the keyboard.
-    let typing = ui.ctx().wants_keyboard_input();
-    if !typing && ui.input(|i| i.modifiers.is_none() && i.key_pressed(egui::Key::D)) {
+    if super::plain_d_pressed(ui.ctx()) {
         action.switch_view = true;
     }
     action
@@ -178,11 +179,19 @@ fn transcript_section(ui: &mut Ui, view: &ViewModel) {
         ui.label(&t.cache_share_text);
     } else {
         ui.label("Per model");
-        usage_grid(ui, "per_model", "Model", &t.per_model);
+        if t.per_model.is_empty() {
+            ui.label("no data");
+        } else {
+            usage_grid(ui, "per_model", "Model", &t.per_model);
+        }
         ui.add_space(4.0);
         ui.label("Per day (newest first)");
         // At most 35 rows; the whole view scrolls, so the table needs no scroll area of its own.
-        usage_grid(ui, "per_day", "Day", &t.per_day);
+        if t.per_day.is_empty() {
+            ui.label("no data");
+        } else {
+            usage_grid(ui, "per_day", "Day", &t.per_day);
+        }
         ui.label(&t.cache_share_text);
     }
     let estimate = view

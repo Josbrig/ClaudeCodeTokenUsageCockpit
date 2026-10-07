@@ -84,6 +84,26 @@ fn viewport(settings: &Settings) -> egui::ViewportBuilder {
     }
 }
 
+/// `true` when a plain `D` was pressed in this frame: no Ctrl, Alt or Shift, no key repeat (a
+/// held key switches once), and no text field has the keyboard.
+fn plain_d_pressed(ctx: &egui::Context) -> bool {
+    !ctx.wants_keyboard_input()
+        && ctx.input(|input| {
+            input.modifiers.is_none()
+                && input.events.iter().any(|event| {
+                    matches!(
+                        event,
+                        egui::Event::Key {
+                            key: egui::Key::D,
+                            pressed: true,
+                            repeat: false,
+                            ..
+                        }
+                    )
+                })
+        })
+}
+
 /// Which of the two views is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum View {
