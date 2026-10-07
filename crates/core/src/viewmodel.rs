@@ -162,6 +162,10 @@ pub struct SessionView {
     pub cost_text: String,
 }
 
+/// The names of the four token counts, in the order of the numbers of the chart data
+/// ([`TranscriptView::per_day_numbers`]) and of the columns of the tables.
+pub const TOKEN_KINDS: [&str; 4] = ["Input", "Output", "Cache write", "Cache read"];
+
 /// Token counts as text with thousands separators.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UsageText {
@@ -195,6 +199,9 @@ pub struct TranscriptView {
     pub per_model: Vec<(String, UsageText)>,
     /// Totals per local day as `YYYY-MM-DD`, newest first, at most [`MAX_TRANSCRIPT_DAYS`].
     pub per_day: Vec<(String, UsageText)>,
+    /// The same days in the same order as numbers, in the order of [`TOKEN_KINDS`]: input,
+    /// output, cache write, cache read. For the chart.
+    pub per_day_numbers: Vec<(String, [u64; 4])>,
     /// `cache share 87.0%`, `cache share not available`, or the reason for missing statistics.
     pub cache_share_text: String,
 }
@@ -205,6 +212,7 @@ impl Default for TranscriptView {
             available: false,
             per_model: Vec::new(),
             per_day: Vec::new(),
+            per_day_numbers: Vec::new(),
             cache_share_text: TRANSCRIPTS_NOT_AVAILABLE.to_owned(),
         }
     }
@@ -339,6 +347,23 @@ fn transcripts(stats: Option<&Stats>) -> TranscriptView {
             .rev()
             .take(MAX_TRANSCRIPT_DAYS)
             .map(|(day, usage)| (day.to_string(), UsageText::from(usage)))
+            .collect(),
+        per_day_numbers: stats
+            .per_day
+            .iter()
+            .rev()
+            .take(MAX_TRANSCRIPT_DAYS)
+            .map(|(day, usage)| {
+                (
+                    day.to_string(),
+                    [
+                        usage.input,
+                        usage.output,
+                        usage.cache_creation,
+                        usage.cache_read,
+                    ],
+                )
+            })
             .collect(),
         cache_share_text: cache_share,
     }

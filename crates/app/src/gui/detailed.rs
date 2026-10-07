@@ -12,7 +12,7 @@ use cockpit_core::viewmodel::{
 };
 use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui, Vec2};
 
-use super::theme;
+use super::{bars, theme};
 
 /// Page that lists the licences of the components the program uses.
 pub const LICENCE_NOTICES_URL: &str =
@@ -194,6 +194,11 @@ fn transcript_section(ui: &mut Ui, view: &ViewModel) {
             usage_grid(ui, "per_model", "Model", &t.per_model);
         }
         ui.add_space(4.0);
+        if !t.per_day_numbers.is_empty() {
+            let kind = bars::choice(ui);
+            bars::days(ui, "per_day_chart", &t.per_day_numbers, kind);
+            ui.add_space(4.0);
+        }
         ui.label("Per day (newest first)");
         // At most 35 rows; the whole view scrolls, so the table needs no scroll area of its own.
         if t.per_day.is_empty() {
