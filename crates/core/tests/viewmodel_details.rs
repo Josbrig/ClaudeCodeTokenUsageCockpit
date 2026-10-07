@@ -155,6 +155,55 @@ fn req_014_days_newest_first_and_at_most_35() {
 }
 
 #[test]
+fn req_014_chart_numbers_match_the_table() {
+    let start = Utc
+        .with_ymd_and_hms(2024, 12, 1, 12, 0, 0)
+        .unwrap()
+        .timestamp_millis();
+    // 40 days; day d has input d+1, output 2(d+1), cache write 3(d+1), cache read 4(d+1)
+    let entries: Vec<Entry> = (0..40)
+        .map(|d| {
+            let n = (d + 1) as u64;
+            entry(start + d * 86_400_000, "m", tokens(n, 2 * n, 3 * n, 4 * n))
+        })
+        .collect();
+    let stats = aggregate(&entries, &Utc);
+    let t = view(&[], Some(&stats)).transcripts;
+    assert_eq!(t.per_day_numbers.len(), t.per_day.len());
+    assert_eq!(t.per_day_numbers.len(), MAX_TRANSCRIPT_DAYS);
+    for ((table_day, text), (chart_day, numbers)) in t.per_day.iter().zip(&t.per_day_numbers) {
+        assert_eq!(table_day, chart_day, "same days in the same order");
+        let shown = [
+            &text.input,
+            &text.output,
+            &text.cache_creation,
+            &text.cache_read,
+        ];
+        for (text, number) in shown.iter().zip(numbers) {
+            assert_eq!(
+                text.replace(',', ""),
+                number.to_string(),
+                "{table_day}: the chart shows the numbers of the table"
+            );
+        }
+    }
+    // newest first: the 40th day has the factor 40
+    assert_eq!(
+        t.per_day_numbers[0],
+        ("2025-01-09".to_owned(), [40, 80, 120, 160])
+    );
+    assert_eq!(t.per_day_numbers[34].1, [6, 12, 18, 24]);
+}
+
+#[test]
+fn req_014_no_chart_numbers_without_statistics() {
+    for stats in [None, Some(Stats::default())] {
+        let vm = view(&[], stats.as_ref());
+        assert!(vm.transcripts.per_day_numbers.is_empty());
+    }
+}
+
+#[test]
 fn req_014_cache_share_text() {
     let entries = [entry(NOW_MS, "m", tokens(100, 7, 300, 600))];
     let stats = aggregate(&entries, &Utc);

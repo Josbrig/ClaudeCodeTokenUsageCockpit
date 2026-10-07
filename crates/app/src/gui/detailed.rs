@@ -7,12 +7,12 @@
 use cockpit_core::format;
 use cockpit_core::model::WindowKind;
 use cockpit_core::viewmodel::{
-    NO_DATA_GLYPH, PreviousPeriod, STALE_GLYPH, STALE_LABEL, TranscriptView, UsageText, ViewModel,
-    WindowData, WindowView,
+    NO_DATA_GLYPH, PreviousPeriod, STALE_GLYPH, STALE_LABEL, TOKEN_KINDS, TranscriptView,
+    UsageText, ViewModel, WindowData, WindowView,
 };
 use eframe::egui::{self, Color32, RichText, ScrollArea, Sense, Ui, Vec2};
 
-use super::theme;
+use super::{bars, theme};
 
 /// Page that lists the licences of the components the program uses.
 pub const LICENCE_NOTICES_URL: &str =
@@ -194,6 +194,11 @@ fn transcript_section(ui: &mut Ui, view: &ViewModel) {
             usage_grid(ui, "per_model", "Model", &t.per_model);
         }
         ui.add_space(4.0);
+        if !t.per_day_numbers.is_empty() {
+            let kind = bars::choice(ui);
+            bars::days(ui, "per_day_chart", &t.per_day_numbers, kind);
+            ui.add_space(4.0);
+        }
         ui.label("Per day (newest first)");
         // At most 35 rows; the whole view scrolls, so the table needs no scroll area of its own.
         if t.per_day.is_empty() {
@@ -215,7 +220,7 @@ fn usage_grid(ui: &mut Ui, id: &str, first: &str, rows: &[(String, UsageText)]) 
         .num_columns(5)
         .striped(true)
         .show(ui, |ui| {
-            for head in [first, "Input", "Output", "Cache write", "Cache read"] {
+            for head in std::iter::once(first).chain(TOKEN_KINDS) {
                 ui.label(RichText::new(head).strong());
             }
             ui.end_row();

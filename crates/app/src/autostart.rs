@@ -417,7 +417,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn req_118_switching_on_and_off_in_the_real_registry() {
-        let name = format!("UsageCockpitTest{}", std::process::id());
+        let name = format!("UsageCockpitTestAutostart{}", std::process::id());
         let _cleanup = Cleanup(name.clone());
         let exe = exe();
         assert_eq!(imp::state(&name, &exe).unwrap(), State::Off);

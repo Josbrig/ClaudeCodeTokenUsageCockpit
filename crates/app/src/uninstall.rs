@@ -389,6 +389,17 @@ mod tests {
 
     use super::*;
 
+    /// A start entry name that no other test uses: the tests of one process run in parallel.
+    fn unique_entry_name() -> String {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static COUNTER: AtomicU32 = AtomicU32::new(0);
+        format!(
+            "UsageCockpitTestUninstall{}x{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        )
+    }
+
     struct Fixture {
         _root: tempfile::TempDir,
         loc: Locations,
@@ -403,7 +414,7 @@ mod tests {
             data_dir: base.join("data"),
             config_dir: base.join("config"),
             exe: base.join("bin").join("usage-cockpit.exe"),
-            autostart_name: format!("UsageCockpitTest{}", std::process::id()),
+            autostart_name: unique_entry_name(),
         };
         for dir in [&loc.data_dir, &loc.config_dir, &base.join("claude")] {
             fs::create_dir_all(dir).unwrap();
@@ -635,7 +646,7 @@ mod tests {
             data_dir: parent.join("data"),
             config_dir: parent.join("config"),
             exe: root.path().join("usage-cockpit.exe"),
-            autostart_name: format!("UsageCockpitTest{}", std::process::id()),
+            autostart_name: unique_entry_name(),
         };
         fs::create_dir_all(&loc.data_dir).unwrap();
         fs::create_dir_all(&loc.config_dir).unwrap();
