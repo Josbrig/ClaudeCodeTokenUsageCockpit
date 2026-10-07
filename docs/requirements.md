@@ -263,3 +263,18 @@ Terms used below:
 - Statement: The cockpit shall show its window within 2 seconds *(proposal)* of being started on the reference platforms.
 - Acceptance: Measured over 5 starts on each target platform.
 - Type: non-functional (performance) · Origin: derived ("small tool window") · Status: approved
+
+### REQ-117 Portable use
+- Statement: The cockpit shall run from any folder without installation, and setting up the bridge shall work from any folder, including a folder whose path contains a space. This supplements REQ-023, which no longer excludes such paths.
+- Acceptance: A copy of the executable in a folder with a space in its path sets up the bridge, and the command written to the Claude Code settings runs the bridge through the shell Claude Code uses on that system and is recognised again by the removal.
+- Type: non-functional (usability) · Origin: owner decision 2026-10-07 · Status: draft
+
+### REQ-118 Optional start with the system
+- Statement: The cockpit shall offer a switch in its settings to start with the user's sign-in (desktop session), which is off by default, needs no administrator rights, can be switched off again, and shows the real state of the system entry.
+- Acceptance: Switching on creates exactly one per-user start entry for the current executable path, switching off removes it, and the first start never creates it by itself.
+- Type: functional · Origin: owner decision 2026-10-07 · Status: draft
+
+### REQ-119 Remove everything
+- Statement: The cockpit shall offer a function (window and command line) that undoes everything it created outside its own executable: the bridge entry in the Claude Code settings (with backup), the start entry of REQ-118 and, on the user's explicit choice, its data and configuration folders; it names the backups that stay, and the executable can then be deleted by hand.
+- Acceptance: After the function ran on a test system, a search for entries of the cockpit in the Claude Code settings and in the system's start entries finds none, and the data and configuration folders are gone when chosen.
+- Type: functional · Origin: owner decision 2026-10-07 · Status: draft

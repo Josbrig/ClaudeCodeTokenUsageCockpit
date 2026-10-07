@@ -13,7 +13,7 @@ Nothing is sent anywhere. The cockpit uses no network and no tokens.
 ## Download and start
 
 1. **Get the program.** *Planned for a release:* the file for your system will be on the *Releases* page of the project on GitHub, named `usage-cockpit-<version>-<system>` (with `.exe` on Windows), together with a file `SHA256SUMS`; compare the checksum of your download with the entry there before you start it. *Today:* build it with `cargo build --release` as described in the README.
-2. **Put it in a folder without spaces**, for example `C:\Tools\usage-cockpit\` on Windows or `~/bin/` on Linux and macOS. The bridge command that Claude Code runs contains the path of the program, and a space in it would need quoting that not every shell accepts. The setup refuses a path with a space and tells you so.
+2. **Put it where you want it.** The program is portable: it needs no installation and runs from any folder, for example `C:\Tools\usage-cockpit\` on Windows or `~/bin/` on Linux and macOS. The bridge command that Claude Code runs contains the path of the program. On **Windows** a space in that path is handled (the setup uses the short 8.3 name of the folder, or quotes the path). On **Linux and macOS** the setup still refuses a path with a space and tells you so; use a folder without spaces there.
 3. **Start it.**
    - **Windows** (tried): double-click `usage-cockpit.exe`. The program is not signed yet, so Windows SmartScreen may say that it protected your PC. Choose *More info*, then *Run anyway*, if you trust the download.
    - **macOS** (not tried yet): the program is not signed or notarised yet. Open it once; if macOS refuses, open *System Settings*, *Privacy & Security*, scroll down and choose *Open Anyway* for `usage-cockpit`. This is needed only the first time.
@@ -95,7 +95,7 @@ The exact formulas of sections up to *Previous periods* are in [docs/concept.md]
 - **Other computers are not visible.** The cockpit shows what Claude Code on this computer hands over, and its transcript statistics cover this computer only. Usage on other computers is not visible to it.
 - **No support for API-key billing.** With an API key there are no such usage windows.
 - **A project-level `statusLine` overrides the bridge.** If a project has its own `statusLine` in its `.claude/settings.json`, Claude Code uses that one in that project and the bridge does not run there.
-- **The program must be in a folder without spaces**, and on Windows the command-line setup needs `--yes`.
+- **On Linux and macOS the program must be in a folder without spaces** (Windows has no such limit), and on Windows the command-line setup needs `--yes`.
 - **Wayland (Linux).** Under a Wayland desktop without X11 support, "always on top" and the saved position may not work; under X11 and XWayland they are planned to work (not tried yet).
 - The saved window position is not checked against your monitors: if you unplug a monitor, the window may open outside the visible area (see *Troubleshooting*).
 - The percentages come from Claude Code as they are; the token counts of the transcript statistics are an estimate and not an invoice.
@@ -112,7 +112,7 @@ The exact formulas of sections up to *Previous periods* are in [docs/concept.md]
 - **The window says *Claude Code sent no usage limits*.** Claude Code delivers limits only for Pro and Max subscriptions and only after the first response of a session.
 - **Values are grey and say *stale*.** The newest record is older than the threshold, or a record that could not be read arrived. Use Claude Code once; check the log (`log.txt` in the data folder).
 - **A window says *Window reset* instead of values.** The reset time has passed and no newer record has arrived yet; use Claude Code.
-- **The bridge does not seem to run.** Open the detailed view and press **Set up bridge**: it says if the bridge is already set up. Check that no project of yours has its own `statusLine`, and that the program path has no spaces.
+- **The bridge does not seem to run.** Open the detailed view and press **Set up bridge**: it says if the bridge is already set up. Check that no project of yours has its own `statusLine`, and, on Linux and macOS, that the program path has no spaces.
 - **The window is gone or outside the screen.** Close the cockpit, open `settings.toml` in the configuration folder, and delete the `[window]` section (or set `x` and `y` to small positive numbers), then start it again.
 - ***usage-cockpit is already running.*** Another cockpit of yours is open, maybe behind other windows or minimised.
 - **Settings are reset.** An invalid `settings.toml` is renamed to `settings.toml.invalid` and the defaults are used.

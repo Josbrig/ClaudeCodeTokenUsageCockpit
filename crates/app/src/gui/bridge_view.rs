@@ -302,6 +302,7 @@ mod tests {
         ));
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn req_023_a_path_with_a_space_is_explained_and_nothing_is_changed() {
         let mut f = fixture();

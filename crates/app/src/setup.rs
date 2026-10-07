@@ -45,11 +45,12 @@ pub enum RemoveOutcome {
 /// happens before the first write.
 #[derive(Debug, thiserror::Error)]
 pub enum SetupError {
-    /// A space in the path would need quoting, which not every shell Claude Code uses accepts.
+    /// A space in the path would need quoting, which is only done on Windows so far.
     #[error(
         "the path of the executable contains a space ({0}); place usage-cockpit in a folder \
          without spaces and run the command again"
     )]
+    #[cfg_attr(windows, allow(dead_code))]
     PathWithSpace(PathBuf),
     /// The settings file does not hold a JSON object.
     #[error("{0} is not a JSON object; fix or remove it by hand")]
@@ -161,13 +162,64 @@ pub fn remove(
     Ok(RemoveOutcome::Removed { backup })
 }
 
-/// `<exe with forward slashes> bridge`; fails if the path contains a space.
+/// `<exe with forward slashes> bridge`.
+///
+/// A path with a space is not accepted by every shell Claude Code may use. On Windows the 8.3
+/// short name is used then (it has no space and works in every shell); if the volume has none,
+/// the path is put in double quotes, which Git Bash and cmd accept. Elsewhere such a path is
+/// refused until the quoting for `sh -c` is done.
 fn bridge_command(exe: &Path) -> Result<String, SetupError> {
     let path = exe.to_string_lossy().replace('\\', "/");
-    if path.contains(' ') {
-        return Err(SetupError::PathWithSpace(exe.to_path_buf()));
+    if !path.contains(' ') {
+        return Ok(format!("{path} bridge"));
     }
-    Ok(format!("{path} bridge"))
+    #[cfg(windows)]
+    {
+        // Only the folder is shortened: the file name must stay `usage-cockpit[.exe]` so that
+        // `is_bridge` still recognises the command.
+        let short = exe
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .filter(|name| !name.contains(' '))
+            .zip(exe.parent().and_then(short_path))
+            .map(|(name, folder)| format!("{}/{name}", folder.replace('\\', "/")))
+            .filter(|short| !short.contains(' '));
+        Ok(windows_command(&path, short))
+    }
+    #[cfg(not(windows))]
+    {
+        Err(SetupError::PathWithSpace(exe.to_path_buf()))
+    }
+}
+
+/// The command for a path with a space: the short form if there is one, else the quoted path.
+#[cfg(windows)]
+fn windows_command(path: &str, short: Option<String>) -> String {
+    match short {
+        Some(short) => format!("{short} bridge"),
+        None => format!("\"{path}\" bridge"),
+    }
+}
+
+/// The 8.3 short form of an existing path, if the volume has one.
+#[cfg(windows)]
+fn short_path(path: &Path) -> Option<String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    // SAFETY: `wide` is NUL-terminated; a null buffer of length 0 only asks for the needed size.
+    let needed = unsafe { GetShortPathNameW(wide.as_ptr(), std::ptr::null_mut(), 0) };
+    if needed == 0 {
+        return None;
+    }
+    let mut buffer = vec![0u16; needed as usize];
+    // SAFETY: `buffer` holds `needed` units and `wide` is NUL-terminated.
+    let written = unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), needed) };
+    if written == 0 || written >= needed {
+        return None;
+    }
+    String::from_utf16(&buffer[..written as usize]).ok()
 }
 
 fn current_command(status_line: Option<&Value>) -> Option<&str> {
@@ -182,8 +234,19 @@ fn is_bridge(status_line: &Value) -> bool {
     let Some(command) = current_command(Some(status_line)) else {
         return false;
     };
-    let mut parts = command.split_whitespace();
-    let (Some(program), Some("bridge"), None) = (parts.next(), parts.next(), parts.next()) else {
+    // `"<path with spaces>" bridge` or `<path> bridge`
+    let (program, rest) = match command.strip_prefix('"') {
+        Some(quoted) => match quoted.split_once('"') {
+            Some((program, rest)) => (program, rest),
+            None => return false,
+        },
+        None => match command.split_once(char::is_whitespace) {
+            Some((program, rest)) => (program, rest),
+            None => return false,
+        },
+    };
+    let mut parts = rest.split_whitespace();
+    let (Some("bridge"), None) = (parts.next(), parts.next()) else {
         return false;
     };
     let name = program.rsplit(['/', '\\']).next().unwrap_or_default();
@@ -509,6 +572,72 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn req_117_path_with_space_is_accepted_on_windows() {
+        let d = dirs();
+        put_settings(&d, r#"{"a":1}"#);
+        let folder = d.exe.parent().unwrap().join("with space");
+        fs::create_dir_all(&folder).unwrap();
+        let exe = folder.join("usage-cockpit.exe");
+        fs::write(&exe, b"").unwrap();
+        assert_eq!(
+            setup(&d.settings, &exe, &d.state, &mut yes).unwrap(),
+            SetupOutcome::Changed {
+                backup: Some(backups(&d).remove(0))
+            }
+        );
+        let command = json_of(&d.settings)["statusLine"]["command"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let program = command.strip_suffix(" bridge").expect(&command);
+        // either the short folder name without a space or the quoted long name
+        assert!(
+            !program.contains(' ') || program.starts_with('"'),
+            "{command}"
+        );
+        assert!(
+            program.to_lowercase().contains("usage-cockpit.exe"),
+            "{command}"
+        );
+        assert!(is_bridge(&json!({"type": "command", "command": command})));
+        // the same file again is "already set up", and remove puts the settings back
+        assert_eq!(
+            setup(&d.settings, &exe, &d.state, &mut yes).unwrap(),
+            SetupOutcome::AlreadySetUp
+        );
+        remove(&d.settings, &d.state, &mut yes).unwrap();
+        assert_eq!(json_of(&d.settings), json!({"a": 1}));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn req_117_without_a_short_name_the_path_is_quoted() {
+        let command = windows_command("C:/My Tools/usage-cockpit.exe", None);
+        assert_eq!(command, "\"C:/My Tools/usage-cockpit.exe\" bridge");
+        assert!(is_bridge(&json!({"type": "command", "command": command})));
+        let short = windows_command(
+            "C:/My Tools/usage-cockpit.exe",
+            Some("C:/MYTOOL~1/usage-cockpit.exe".into()),
+        );
+        assert_eq!(short, "C:/MYTOOL~1/usage-cockpit.exe bridge");
+    }
+
+    #[test]
+    fn req_117_quoted_command_is_recognised_as_the_bridge() {
+        let line = |command: &str| json!({"type": "command", "command": command});
+        assert!(is_bridge(&line("\"C:/My Tools/usage-cockpit.exe\" bridge")));
+        assert!(is_bridge(&line("\"/opt/my tools/usage-cockpit\" bridge")));
+        assert!(!is_bridge(&line("\"C:/My Tools/usage-cockpit.exe bridge")));
+        assert!(!is_bridge(&line("\"C:/My Tools/other.exe\" bridge")));
+        assert!(!is_bridge(&line(
+            "\"C:/My Tools/usage-cockpit.exe\" bridge x"
+        )));
+        assert!(!is_bridge(&line("\"C:/My Tools/usage-cockpit.exe\"")));
+    }
+
+    #[cfg(not(windows))]
     #[test]
     fn req_023_path_with_space_refused() {
         let d = dirs();

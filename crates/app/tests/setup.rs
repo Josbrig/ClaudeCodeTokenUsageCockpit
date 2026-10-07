@@ -114,3 +114,79 @@ fn req_023_declining_the_question_leaves_the_file_identical() {
             .is_some()
     );
 }
+
+/// Git for Windows bash, the shell Claude Code uses on Windows; `None` if it is not installed.
+#[cfg(windows)]
+fn git_bash() -> Option<std::path::PathBuf> {
+    ["ProgramFiles", "ProgramFiles(x86)"]
+        .iter()
+        .filter_map(std::env::var_os)
+        .map(|base| Path::new(&base).join("Git").join("bin").join("bash.exe"))
+        .find(|path| path.is_file())
+}
+
+/// Runs `command` through Git Bash with a record on standard input; returns what it printed.
+#[cfg(windows)]
+fn run_in_bash(bash: &Path, command: &str, home: &Path) -> String {
+    let record = format!(
+        "{{\"session_id\":\"t\",\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":23.5,\"resets_at\":{}}},\"seven_day\":{{\"used_percentage\":41.2,\"resets_at\":{}}}}}}}",
+        4_102_444_800_u64, 4_102_444_800_u64
+    );
+    let output = Command::new(bash)
+        .args(["-c", command])
+        .env("USAGE_COCKPIT_HOME", home)
+        .write_stdin(record)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+#[cfg(windows)]
+#[test]
+fn req_117_the_bridge_runs_from_a_folder_with_a_space() {
+    let Some(bash) = git_bash() else {
+        eprintln!("Git for Windows bash not found: the shell part of this test is skipped");
+        return;
+    };
+    let home = tempfile::tempdir().unwrap();
+    let folder = home.path().join("my tools");
+    fs::create_dir_all(&folder).unwrap();
+    let exe = folder.join("usage-cockpit.exe");
+    fs::copy(assert_cmd::cargo::cargo_bin!("usage-cockpit"), &exe).unwrap();
+
+    Command::new(&exe)
+        .args(["setup-bridge", "--yes"])
+        .env("USAGE_COCKPIT_HOME", home.path())
+        .env("CLAUDE_CONFIG_DIR", home.path().join("claude"))
+        .assert()
+        .success();
+    let settings = read_json(&settings_path(home.path()));
+    let command = settings["statusLine"]["command"].as_str().unwrap();
+    assert!(command.ends_with(" bridge"), "{command}");
+    assert_eq!(
+        run_in_bash(&bash, command, home.path()).trim(),
+        "5h 23.5% \u{b7} 7d 41.2%",
+        "command: {command}"
+    );
+
+    // the quoted form, used when a volume has no 8.3 names, runs in bash as well
+    let quoted = format!("\"{}\" bridge", exe.to_string_lossy().replace('\\', "/"));
+    assert_eq!(
+        run_in_bash(&bash, &quoted, home.path()).trim(),
+        "5h 23.5% \u{b7} 7d 41.2%",
+        "command: {quoted}"
+    );
+
+    Command::new(&exe)
+        .args(["remove-bridge", "--yes"])
+        .env("USAGE_COCKPIT_HOME", home.path())
+        .env("CLAUDE_CONFIG_DIR", home.path().join("claude"))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("removed"));
+    assert!(
+        read_json(&settings_path(home.path()))
+            .get("statusLine")
+            .is_none()
+    );
+}
