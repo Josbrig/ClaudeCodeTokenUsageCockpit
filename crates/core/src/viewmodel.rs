@@ -209,6 +209,15 @@ pub struct PreviousPeriod {
 /// How many finished periods are listed per window.
 pub const PREVIOUS_PERIODS_PER_WINDOW: usize = 3;
 
+/// Glyph of the stale marker (concept §11.1).
+pub const STALE_GLYPH: &str = "⏸";
+/// Text of the stale marker next to its glyph.
+pub const STALE_LABEL: &str = "stale";
+/// Glyph of a window without data (concept §11.1).
+pub const NO_DATA_GLYPH: &str = "○";
+/// Glyph that marks the binding limit next to the window label (concept §11.1).
+pub const BINDING_GLYPH: &str = "⚑";
+
 /// Glyph of a pace state (concept §11.1).
 pub fn glyph(state: PaceState) -> &'static str {
     match state {
