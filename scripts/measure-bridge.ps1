@@ -10,10 +10,10 @@
   real installation is touched.
 
   The wall time includes the start of the process, which a PowerShell script cannot separate
-  from the program's own work. To show how much of it is the start of any process on this
-  machine, the script also runs an empty program (`cmd.exe /c exit`) the same way and prints its
-  median. The difference is the part that belongs to the bridge. The requirement (100 ms)
-  concerns the bridge's own processing; both numbers are printed so that the reader can judge.
+  from the program's own work. To show how much of it is only the start of this program, the
+  script also runs the same program with `--version` (it starts, prints one line and ends) the
+  same way and prints its median. Both numbers are printed so that the reader can judge; the
+  first one is the literal measurement of the requirement (median of 100 calls).
 
 .PARAMETER Exe
   The program to measure. Default: the release build, else the debug build, in this repository.
@@ -73,9 +73,8 @@ try {
         $times.Add($call.Ms)
     }
     $baseline = New-Object System.Collections.Generic.List[double]
-    $cmd = Join-Path $env:SystemRoot 'System32\cmd.exe'
     for ($i = 0; $i -lt [math]::Min($Runs, 50); $i++) {
-        $baseline.Add((Measure-Call -Program $cmd -Arguments '/c exit' -InputText '' -Home1 $home1).Ms)
+        $baseline.Add((Measure-Call -Program $Exe -Arguments '--version' -InputText '' -Home1 $home1).Ms)
     }
 
     $sorted = $times | Sort-Object
@@ -84,8 +83,9 @@ try {
     $max = $sorted[$sorted.Count - 1]
     $empty = Get-Median ($baseline | Sort-Object)
     '{0} runs: median {1:N1} ms, 95th percentile {2:N1} ms, maximum {3:N1} ms' -f $Runs, $median, $p95, $max
-    'An empty program (cmd.exe /c exit) takes {0:N1} ms the same way; bridge minus empty program: {1:N1} ms (limit: 100 ms)' -f `
+    'The same program with --version (start and one line of output) takes {0:N1} ms the same way; bridge minus that: {1:N1} ms.' -f `
         $empty, ($median - $empty)
+    'Limit of REQ-109: median below 100 ms.'
 }
 finally {
     Remove-TempHome $home1

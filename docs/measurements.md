@@ -28,7 +28,7 @@ All scripts work in a new temporary folder (`USAGE_COCKPIT_HOME`), so your real 
 
 ## What the numbers mean
 
-- **Bridge:** the time of a whole call from a script includes the start of the process, which belongs to the operating system and not to the bridge. The script therefore also runs an empty program (`cmd.exe /c exit`) the same way and prints the difference. Note both numbers in the table. The requirement is about the bridge's own processing.
+- **Bridge:** the time of a whole call from a script includes the start of the process, which belongs to the operating system and not to the bridge. The first number is the literal measurement of REQ-109 (median of 100 whole calls). The script also runs the same program with `--version` (it starts, prints one line and ends) the same way; the difference shows what the bridge's own work adds to the bare start of the program. Note both numbers in the table.
 - **Idle:** CPU is the share of **one** core (a program that keeps one core busy shows 100 %), sampled every second after 15 seconds of settling; memory is the working set. The script prints averages and maxima; the limits apply to the averages.
 - **Start-up:** the time from starting the process until the program writes the log line `window ready` after drawing its first frame. The script polls the log file every 20 ms.
 
@@ -36,9 +36,9 @@ All scripts work in a new temporary folder (`USAGE_COCKPIT_HOME`), so your real 
 
 Fill in one row per platform and build. Date, version and commit come from `usage-cockpit --version`.
 
-| Platform | Date | Version (commit) | Bridge: median / empty program | Idle: CPU avg / memory avg | Start-up: max of 5 | Measured by |
+| Platform | Date | Version (commit) | Bridge: median of 100 calls / same program with `--version` | Idle: CPU avg / memory avg | Start-up: max of 5 | Measured by |
 |---|---|---|---|---|---|---|
-| Windows 11 x64 (developer machine, see below) | 2026-10-07 | 0.1.0 (build of the day) | 100.4 ms / 91.2 ms (difference 9.1 ms) | 0.23 % / 88.0 MB (10 min) | 462 ms | the developer's assistant, release build |
+| Windows 11 x64 (developer machine, see below) | 2026-10-07 | 0.1.0 (build of the day) | 101.3 ms and 99.8 ms (two runs) / `--version` 100.3 ms and 97.7 ms | 0.23 % / 88.0 MB (10 min) | 621 ms | the developer's assistant, release build |
 | Linux x64 | | | | | | |
 | Linux arm64 (Raspberry Pi) | | | | | | |
 | macOS Apple Silicon | | | | | | |
@@ -48,6 +48,6 @@ The Windows row was measured on the machine the program was developed on (releas
 
 ### Notes on the Windows row
 
-- **Bridge:** the whole call took a median of 100.4 ms; an empty program took 91.2 ms the same way, so the bridge's own part was about 9 ms. Two earlier runs showed medians of 96.4 ms and 97.6 ms against an empty program of 82.9 ms (same difference, other load). The process start on this machine is therefore the larger part of the 100 ms; judge the requirement by the difference.
+- **Bridge:** two runs of 100 calls gave medians of 101.3 ms and 99.8 ms (95th percentile 105.3 and 106.5 ms). The same program started with `--version` took 100.3 ms and 97.7 ms, so the bridge's own work adds about 1 to 2 ms; an empty `cmd.exe /c exit` took 83 to 91 ms in earlier trials. Read literally, the criterion (median below 100 ms) is **borderline on this machine: it is missed by about 1 ms in one run and met by 0.2 ms in the other**. Almost all of the time is the start of the program on Windows (loading a 6.5 MB executable, security software), not the work of the bridge. Whether the requirement is meant for the whole call or for the bridge's own processing, and whether a smaller separate executable for the bridge is wanted, is for the owner to decide.
 - **Idle, 10 minutes:** CPU average 0.23 % of one core (maximum of a single second 14.0 %), memory average 88.0 MB (maximum 92.1 MB). Both are below the limits, the memory with little room. In this run the cockpit also read the real Claude Code transcripts of this machine (209 files, 811 MB in total, of which the files of the last 35 days count); an extra run of 90 seconds with an empty Claude folder gave 76.4 MB memory and 0.67 % CPU on average (that run was short and its CPU figure was disturbed by single busy seconds). So the transcript statistics cost roughly 12 MB here, and a machine with much more transcript text will need more. This is a point to watch against the 100 MB limit.
-- **Start-up:** 455, 439, 462, 448 and 442 ms until the line `window ready`, so about 0.45 s against the 2 s limit.
+- **Start-up:** 599, 588, 591, 618 and 621 ms until the line `window ready` (written after the first frame has been drawn), so about 0.6 s against the 2 s limit.

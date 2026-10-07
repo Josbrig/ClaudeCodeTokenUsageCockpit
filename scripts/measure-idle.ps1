@@ -66,6 +66,6 @@ try {
     'Limits: CPU below 1 %, memory below 100 MB.'
 }
 finally {
-    if ($process -and -not $process.HasExited) { $process.Kill() }
+    if ($process -and -not $process.HasExited) { $process.Kill(); [void]$process.WaitForExit(5000) }
     Remove-TempHome $home1
 }

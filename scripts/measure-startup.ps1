@@ -50,13 +50,16 @@ for ($i = 1; $i -le $Starts; $i++) {
         $ready = $false
         while ($watch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
             if (Test-Path -LiteralPath $log) {
+                $stream = $null
                 try {
                     $stream = [System.IO.File]::Open($log, 'Open', 'Read', 'ReadWrite')
-                    $text = (New-Object System.IO.StreamReader($stream)).ReadToEnd()
-                    $stream.Dispose()
-                    if ($text -match 'window ready') { $ready = $true; break }
+                    $reader = New-Object System.IO.StreamReader($stream)
+                    $text = $reader.ReadToEnd()
+                    if ($text -match 'window ready') { $ready = $true }
                 }
                 catch { }
+                finally { if ($stream) { $stream.Dispose() } }
+                if ($ready) { break }
             }
             if ($process.HasExited) { throw "Start ${i}: the cockpit ended with exit code $($process.ExitCode)." }
             Start-Sleep -Milliseconds 20
