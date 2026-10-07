@@ -30,22 +30,22 @@ There are two sources of numbers. The **status line record** carries the usage p
 
 ```mermaid
 flowchart LR
-    CC[Claude Code] -- "JSON on stdin,\nafter each response" --> B["usage-cockpit bridge"]
-    B -- "latest.json (atomic)\nhistory-v1.jsonl (append)" --> D[("data folder")]
-    B -- "text on stdout\n(kept status line or own text)" --> CC
-    T[("transcripts\n~/.claude/projects/**/*.jsonl")] --> S["scanner thread\n(every 60 s)"]
-    D --> P["poller thread\n(every 500 ms)"]
+    CC[Claude Code] -- "JSON on stdin,<br/>after each response" --> B["usage-cockpit bridge"]
+    B -- "latest.json (atomic)<br/>history-v1.jsonl (append)" --> D[("data folder")]
+    B -- "text on stdout<br/>(kept status line or own text)" --> CC
+    T[("transcripts<br/>~/.claude/projects/**/*.jsonl")] --> S["scanner thread<br/>(every 60 s)"]
+    D --> P["poller thread<br/>(every 500 ms)"]
     P --> M["Model: records"]
     S --> M2["Stats: tokens"]
     M --> V["build() = view model"]
     M2 --> V
     ST[("settings.toml")] --> V
-    V --> W["window\n(compact / detailed)"]
+    V --> W["window<br/>(compact / detailed)"]
 ```
 
 The bridge and the window never talk to each other directly: the data folder is the only interface. The window may be closed, restarted or not running at all while Claude Code keeps feeding the bridge; the history in the data folder bridges the gaps.
 
-Nothing in the program uses the network. See [section 9](#9-security-and-privacy).
+The program makes no network connection of its own. See [section 9](#9-security-and-privacy).
 
 ## 2. Repository and modules
 
@@ -87,7 +87,7 @@ A Cargo workspace with two crates:
 | `instance` | One window per user: an exclusive lock on `cockpit.lock`. |
 | `gui` | The window: `mod.rs` (the application object), `state.rs` (data and threads), `compact.rs`, `detailed.rs`, `chart.rs` (history chart), `bars.rs` (token bar charts), `theme.rs` (colours and symbols), `settings_view.rs`, `bridge_view.rs`, `uninstall_view.rs` (dialogs), `window_state.rs` (position, size, level). |
 
-`main.rs` has a test that pins a rule: **the bridge starts without running any GUI code**. Only `main` calls into `gui`.
+`main.rs` has a test that pins a rule: **the bridge starts without running any GUI code**. The test checks that `bridge.rs` and `shell.rs` mention no GUI code; in the program, only `main` starts the window.
 
 ## 3. Files and formats
 
@@ -126,7 +126,7 @@ The record's JSON fields: `received_at_ms`, `session_id`, `cc_version`, `five_ho
 ### 3.3 The configuration folder
 
 - `settings.toml`: `version`, `tolerance_pp` (0 to 50, default 5), `stale_after_s` (60 to 86,400, default 600), `rate_period_s` (300 to 7,200, default 1,800), `always_on_top` (default true), `start_view` (`compact` or `detailed`) and a `[window]` table (`x`, `y`, `width`, `height`). A missing file gives the defaults; a file that is not valid TOML is renamed to `settings.toml.invalid` and the defaults are used; a single value that is missing, of the wrong type or out of range falls back to its default while the others are kept.
-- `bridge-state.json`: `{"v":1,"previous_status_line": <object or null>}`, the status line that was replaced by the bridge. It is written **only** by setup and removal, never by the window, so a running window cannot overwrite it.
+- `bridge-state.json`: `{"v":1,"previous_status_line": <object or null>}`, the status line that was replaced by the bridge. It is written only by setup and removal (the commands, and the window's dialogs for them, which call the same functions), never by the window's own saving of settings and geometry, so a running window cannot overwrite it by accident.
 
 ### 3.4 Files of Claude Code that the program touches
 
@@ -147,13 +147,13 @@ The record is stored **before** the kept command runs, so a slow or failing kept
 
 **Speed.** Almost all of the time is the start of the process. On the development machine the median of 100 calls is about 66 ms, the same as the program started with `--version` (see [measurements.md](measurements.md)). The bridge initialises no GUI code and writes no console.
 
-**The kept command (`shell`).** Unix: `sh -c <command>`. Windows: Git for Windows bash, searched in this order: `CLAUDE_CODE_GIT_BASH_PATH`, `%ProgramFiles%\Git\bin\bash.exe`, `%ProgramFiles(x86)%\Git\bin\bash.exe`, `%LOCALAPPDATA%\Programs\Git\bin\bash.exe`, and `..\bin\bash.exe` next to a `git.exe` found on the `PATH`; a `bash.exe` below `System32` is never used (that is WSL). If none is found, `powershell -NoProfile -Command`. The standard library has no wait with timeout, so the child is polled every 10 ms; input and output are served from threads (a command that does not read its input cannot block); on timeout the child is killed. On Windows the child is put in a **job object** with kill-on-close, so a grandchild such as a `sleep` started by bash dies too; otherwise it would keep the output pipe open and Claude Code would wait for the end of the output. Output is cut at 1 MiB.
+**The kept command (`shell`).** Unix: `sh -c <command>`. Windows: Git for Windows bash, searched in this order: `CLAUDE_CODE_GIT_BASH_PATH`, `%ProgramFiles%\Git\bin\bash.exe`, `%ProgramFiles(x86)%\Git\bin\bash.exe`, `%LOCALAPPDATA%\Programs\Git\bin\bash.exe`, and `..\bin\bash.exe` or `..\..\bin\bash.exe` next to a `git.exe` found on the `PATH` (for `Git\cmd` and `Git\mingw64\bin`); a `bash.exe` below `System32` is never used (that is WSL). If none is found, `powershell -NoProfile -Command`. The standard library has no wait with timeout, so the child is polled every 10 ms; input and output are served from threads (a command that does not read its input cannot block); on timeout the child is killed. On Windows the child is put in a **job object** with kill-on-close, so a grandchild such as a `sleep` started by bash dies too; otherwise it would keep the output pipe open and Claude Code would wait for the end of the output. Output is cut at 1 MiB.
 
 ## 5. The calculations
 
 All in `cockpit-core::metrics`, `periods` and `planning`; the view model only calls them. Notation for one window: `u` used percent (clamped to 0 to 100), `R` reset time, `L` length of the window (5 h = 18,000 s; 7 d = 604,800 s), `now`, `tol` the tolerance band, `P` the rate period.
 
-**Periods.** Records of one window kind are grouped in received order. A record continues the current period if its reset time differs from the period's last reset time by at most 600 s **and** it was received before that reset time; otherwise it starts a new period. The *current* period is the latest one whose reset time is in the future. Without one, the window shows *Window reset. Waiting for new data from Claude Code.*
+**Periods.** Records of one window kind are grouped in received order. A record continues the current period if its reset time differs from the period's last reset time by at most 600 s **and** it was received before that reset time; otherwise it starts a new period. The *current* period is the latest one whose reset time is in the future; it is the base of the usage rate and the chart. A window shows *Window reset. Waiting for new data from Claude Code.* when the reset time of the **newest record** (by receive time) has passed.
 
 **Basic values.**
 - remaining = 100 − u; time to reset = max(0, R − now);
@@ -171,7 +171,7 @@ All in `cockpit-core::metrics`, `periods` and `planning`; the view model only ca
 
 **Binding limit.** Of the two windows, the one that is exhausted first: *limit reached* counts as exhausted now, *limit first* at its predicted time, the others never. If both are exhausted at the same moment, the 7-day window binds (it holds you back longer). If neither reaches its limit before its reset, or a window has no data, there is none.
 
-**Weekly plan.** With a 7-day window whose reset is in the future: n = ⌈(R7 − now) / 18,000 s⌉ in integer arithmetic and (100 − u7) / n percent per 5-hour window. *Example:* 50 h left and 60 % remaining give n = 10 and 6 %.
+**Weekly plan.** Only when both windows have data (the 5-hour window too) and the reset of the 7-day sample of the newest record is in the future: n = ⌈(R7 − now) / 18,000 s⌉ in integer arithmetic and (100 − u7) / n percent per 5-hour window. *Example:* 50 h left and 60 % remaining give n = 10 and 6 %.
 
 **Data age and stale.** Age = now − received time of the newest record (0 for a record from the future). *Stale* if the age exceeds `stale_after_s`, **or** if `last_error.json` is newer than the newest record (a malformed record arrived). The values stay, marked stale.
 
@@ -181,10 +181,10 @@ All in `cockpit-core::metrics`, `periods` and `planning`; the view model only ca
 
 ## 6. The window
 
-**Start.** `main` reads the settings, takes the single-instance lock (`cockpit.lock`; a second start only shows a small notice and ends), and calls `gui::run`, which opens an `eframe` window (egui 0.33, `glow` backend) at the saved position and size, on top if the settings say so.
+**Start.** `main` starts the log, takes the single-instance lock (`cockpit.lock`; a second start only shows a small notice and ends), reads the settings, and calls `gui::run`, which opens an `eframe` window (egui 0.33, `glow` backend) at the saved position and size, on top if the settings say so.
 
 **Threads.** Plain `std` threads, no async runtime; they send over channels and wake the window with `request_repaint`:
-- the **poller** reads `latest.json` and `last_error.json` every 500 ms and compares by content (a changed file time is not needed); a file that cannot be parsed at that moment (it is being replaced) counts as unchanged;
+- the **poller** reads `latest.json` and `last_error.json` every 500 ms and compares by content (a changed file time is not needed); a file that cannot be parsed at that moment (it is being replaced) counts as unchanged; a newer `last_error.json` is reported as its own event (it makes the data *stale*);
 - the **scanner** scans the transcripts at once and then every 60 s and sends the totals;
 - the **pruner** prunes the history at once and then hourly.
 
@@ -231,7 +231,7 @@ On Windows the command line cannot ask a question reliably (after attaching to t
 
 `describe` returns the plan in words and changes nothing; `run` does the steps in this order: the bridge entry (as `remove`), the start entry, and, only if the person chose it, the data and configuration folders. The folders are cleaned **file by file**: only files with the known names (and the temporary files `<known name>.<n>.<n>.<n>.tmp` of atomic writes) are deleted, and a folder only if it is empty afterwards (a link as the folder is refused), so a wrongly set `USAGE_COCKPIT_HOME` cannot cost other files. If a step failed, the data is kept: the stored status line is needed to put the old one back. The backups of the Claude Code settings and the program file always stay.
 
-The running window holds files in the data folder open. So the window does not delete them itself: it writes the marker `uninstall-pending` into the data folder, starts **itself again** as the hidden command `finish-uninstall --after <pid>` (detached, without a window), and exits when the person presses OK. The helper deletes **only if** the marker exists, the window's process has ended (waits at most five minutes; a process that is still alive after that means nothing is deleted), and the bridge is really gone from the Claude Code settings. It retries locked files for about ten seconds. It has no window and cannot report problems (the user guide says to delete a folder by hand if one is still there). The command line `uninstall --remove-data` deletes at once after checking that no window runs (it takes the instance lock and releases it before deleting).
+The running window holds files in the data folder open. So the window does not delete them itself: it writes the marker `uninstall-pending` into the data folder, starts **itself again** as the hidden command `finish-uninstall --after <pid>` (detached, without a window), and exits when the person presses OK. The helper deletes **only if** the marker exists, the window's process has ended (on Windows it waits at most five minutes and deletes nothing if the process is still alive after that; on other systems it only pauses three seconds, because that part is not done for them yet), and the bridge is really gone from the Claude Code settings. It retries locked files for about ten seconds. It has no window and cannot report problems (the user guide says to delete a folder by hand if one is still there). The command line `uninstall --remove-data` deletes at once after checking that no window runs (it takes the instance lock and releases it before deleting); if a window runs, it still removes the bridge entry and the start entry, keeps the data, and says so.
 
 ## 8. Build, test and release
 
@@ -253,7 +253,8 @@ cargo test --all
 
 ## 9. Security and privacy
 
-- **No network.** There is no network code, and `cargo tree` shows no HTTP, TLS or async-runtime crate among the dependencies (the window uses `glow`/OpenGL, not a web backend); a running window had no TCP or UDP endpoint when this was looked at. The program uses no tokens and does not log in anywhere.
+- **No network connection of its own.** There is no network code of the program's own, and `cargo tree` shows no HTTP or TLS crate among the dependencies. On Linux the accessibility part of the window toolkit pulls in D-Bus and async I/O crates (`zbus`, `async-io`); they talk to local services only. On Windows and macOS `cargo tree` shows no async-runtime crate. A look at a running Windows window with the system tools, in an earlier session, showed no TCP or UDP endpoint (not repeated for every build). The program uses no tokens and does not log in anywhere.
+- **It starts the web browser in one place:** the link *Licence notices* in the footer of the detailed view opens the system browser when the person clicks it; the program itself makes no connection.
 - **What is read:** the status line record on the bridge's standard input; its own folders; the Claude Code `settings.json` (only to set or restore `statusLine`); the transcript files (read only, only the token counts, timestamps, model names and message ids are used).
 - **What is written:** its own data and configuration folders; `statusLine` in the Claude Code `settings.json` (always with a backup, never without consent); one registry value for the start entry, only on request.
 - **What is never stored or logged:** other fields of the status line input, the content of messages, environment variables, the content of the Claude Code settings. A malformed input is logged as one line without its content.
@@ -264,7 +265,7 @@ cargo test --all
 
 - **Data only while Claude Code runs.** The limits exist only after the first response of a session, only for Claude.ai Pro and Max subscriptions, and only for usage on this computer.
 - **The transcript format is undocumented.** Parsing is tolerant, but a change by Claude Code can make the statistics empty or wrong (the window then says *not available*, it does not crash).
-- **Memory.** The scanner keeps the entries of all transcript files of the last 35 days in memory: 88 MB of resident memory with 811 MB of transcripts on the development machine, against a limit of 100 MB (REQ-105); a machine with more transcript text needs more.
+- **Memory.** The scanner keeps the entries of all transcript files of the last 35 days in memory: an average of 88 MB of resident memory over ten minutes with 811 MB of transcripts in total (the files of the last 35 days count) on the development machine, measured before the C runtime was linked in (see [measurements.md](measurements.md)), against a limit of 100 MB (REQ-105); a machine with more transcript text needs more.
 - **Bridge speed** is dominated by the start of the process; the 100 ms limit is met on the development machine (66 ms) but depends on the machine and security software.
 - **A `statusLine` in a project's own Claude Code settings** overrides the bridge in that project.
 - **The window position is not checked against the monitors**: after unplugging a monitor the window may open outside the visible area.
