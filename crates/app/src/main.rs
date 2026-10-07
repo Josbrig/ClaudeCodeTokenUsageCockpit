@@ -3,7 +3,9 @@
 
 mod bridge;
 mod cli;
+mod commands;
 mod console;
+mod setup;
 mod shell;
 
 use std::process::ExitCode;
@@ -27,13 +29,13 @@ fn main() -> ExitCode {
         None => ExitCode::SUCCESS,
         // The bridge never attaches to a console: its output goes to Claude Code.
         Some(Command::Bridge) => run_bridge(),
-        Some(Command::SetupBridge { .. }) => {
+        Some(Command::SetupBridge { yes }) => {
             console::attach_to_parent();
-            not_implemented("setup-bridge")
+            commands::setup_bridge(yes)
         }
-        Some(Command::RemoveBridge { .. }) => {
+        Some(Command::RemoveBridge { yes }) => {
             console::attach_to_parent();
-            not_implemented("remove-bridge")
+            commands::remove_bridge(yes)
         }
     }
 }
@@ -74,11 +76,6 @@ fn guarded(f: impl FnOnce() -> i32) -> Option<i32> {
 fn print_no_data() {
     use std::io::Write;
     let _ = writeln!(std::io::stdout(), "{}", bridge::NO_DATA_TEXT);
-}
-
-fn not_implemented(command: &str) -> ExitCode {
-    eprintln!("usage-cockpit {command}: not implemented yet");
-    ExitCode::from(2)
 }
 
 #[cfg(test)]

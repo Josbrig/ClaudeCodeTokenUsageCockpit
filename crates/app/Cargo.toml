@@ -11,10 +11,12 @@ name = "usage-cockpit"
 path = "src/main.rs"
 
 [dependencies]
+chrono = "0.4.45"
 clap = { version = "4.6.7", features = ["derive"] }
 cockpit-core = { version = "0.1.0", path = "../core" }
 log = { version = "0.4.34", features = ["std"] }
-serde_json = "1.0.151"
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+thiserror = "2.0.21"
 
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.61.2", features = [

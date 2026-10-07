@@ -43,22 +43,6 @@ fn req_032_no_arguments_exit_quietly_until_the_window_exists() {
 }
 
 #[test]
-fn req_032_placeholder_subcommands_say_so_and_exit_with_2() {
-    for args in [
-        &["setup-bridge"][..],
-        &["setup-bridge", "--yes"][..],
-        &["remove-bridge", "--yes"][..],
-    ] {
-        cockpit()
-            .args(args)
-            .assert()
-            .code(2)
-            .stdout(predicate::str::is_empty())
-            .stderr(predicate::str::contains("not implemented yet"));
-    }
-}
-
-#[test]
 fn req_032_help_lists_the_subcommands() {
     cockpit()
         .arg("--help")
