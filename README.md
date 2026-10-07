@@ -30,6 +30,7 @@ Claude Code passes the usage percentages and reset times of both windows to a co
 | Document | Content |
 |---|---|
 | [docs/user-guide.md](docs/user-guide.md) | How to start, set up, read and remove the cockpit |
+| [docs/technical-documentation.md](docs/technical-documentation.md) | How the program works, as built: data flow, modules, files, bridge, calculations, window, setup and removal, build and test |
 | [docs/project-brief.md](docs/project-brief.md) | The original project brief |
 | [docs/project-description.md](docs/project-description.md) | Goals, metrics, data sources, risks |
 | [docs/requirements.md](docs/requirements.md) | Requirements with IDs (draft) |
