@@ -64,9 +64,7 @@ pub fn show(ui: &mut Ui, view: &ViewModel) -> Action {
             action.switch_view = response.clicked();
         });
     });
-    // Only a plain D: not with Ctrl, Alt or Shift, and not while a text field has the keyboard.
-    let typing = ui.ctx().wants_keyboard_input();
-    if !typing && ui.input(|i| i.modifiers.is_none() && i.key_pressed(egui::Key::D)) {
+    if super::plain_d_pressed(ui.ctx()) {
         action.switch_view = true;
     }
     action
