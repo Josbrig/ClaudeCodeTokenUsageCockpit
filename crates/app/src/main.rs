@@ -5,13 +5,14 @@ mod bridge;
 mod cli;
 mod commands;
 mod console;
+mod gui;
 mod setup;
 mod shell;
 
 use std::process::ExitCode;
 
 use clap::Parser;
-use cockpit_core::{logging, paths};
+use cockpit_core::{logging, paths, settings};
 
 use cli::{Cli, Command};
 
@@ -25,8 +26,7 @@ fn main() -> ExitCode {
         }
     };
     match cli.command {
-        // The window follows in a later issue.
-        None => ExitCode::SUCCESS,
+        None => run_window(),
         // The bridge never attaches to a console: its output goes to Claude Code.
         Some(Command::Bridge) => run_bridge(),
         Some(Command::SetupBridge { yes }) => {
@@ -36,6 +36,23 @@ fn main() -> ExitCode {
         Some(Command::RemoveBridge { yes }) => {
             console::attach_to_parent();
             commands::remove_bridge(yes)
+        }
+    }
+}
+
+/// Opens the cockpit window. Errors go to the log; the window program has no console.
+fn run_window() -> ExitCode {
+    let (data_dir, config_dir) = match (paths::data_dir(), paths::config_dir()) {
+        (Ok(data), Ok(config)) => (data, config),
+        _ => return ExitCode::FAILURE,
+    };
+    let _ = logging::init(&data_dir, "cockpit", logging::DEFAULT_MAX_BYTES);
+    let settings = settings::load(&config_dir.join("settings.toml"));
+    match gui::run(&settings) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            log::error!("the window stopped with an error: {error}");
+            ExitCode::FAILURE
         }
     }
 }
@@ -81,6 +98,19 @@ fn print_no_data() {
 #[cfg(test)]
 mod tests {
     use super::guarded;
+
+    /// The bridge must start without any GUI code (REQ-109: under 100 ms, no GUI initialisation).
+    #[test]
+    fn req_018_gui_module_not_used_by_bridge() {
+        for (name, source) in [
+            ("bridge.rs", include_str!("bridge.rs")),
+            ("shell.rs", include_str!("shell.rs")),
+        ] {
+            for word in ["gui::", "eframe", "egui"] {
+                assert!(!source.contains(word), "{name} mentions {word}");
+            }
+        }
+    }
 
     #[test]
     fn req_109_guarded_returns_the_result_of_a_normal_run() {

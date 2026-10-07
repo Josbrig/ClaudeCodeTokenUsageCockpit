@@ -34,15 +34,6 @@ fn req_032_version_matches_the_package_version() {
 }
 
 #[test]
-fn req_032_no_arguments_exit_quietly_until_the_window_exists() {
-    cockpit()
-        .assert()
-        .success()
-        .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::is_empty());
-}
-
-#[test]
 fn req_032_help_lists_the_subcommands() {
     cockpit()
         .arg("--help")
