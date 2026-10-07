@@ -86,26 +86,38 @@ fn ask_or_nothing(plan: Option<String>) -> Stage {
     }
 }
 
-/// Makes the change after the person agreed and returns the result in plain words.
-pub fn perform(kind: Kind, paths: &Paths) -> String {
-    let mut yes = |_: &str| true;
-    match kind {
-        Kind::Setup => match setup::setup(&paths.settings, &paths.exe, &paths.state, &mut yes) {
-            Ok(SetupOutcome::Changed { backup }) => {
-                let mut text = "The bridge is set up.".to_owned();
-                if let Some(backup) = backup {
-                    text.push_str(&format!(
-                        " A copy of the old settings is {}.",
-                        backup.display()
-                    ));
+/// Shown when the settings changed between the question and the answer.
+pub const SETTINGS_CHANGED: &str = "The Claude Code settings changed while this window was open, so nothing was changed. Please try again.";
+
+/// Makes the change after the person agreed to `shown_plan` and returns the result in plain
+/// words. If the plan is not the same any more (the settings changed meanwhile), nothing is
+/// changed: the person agreed to that plan and no other.
+pub fn perform(kind: Kind, paths: &Paths, shown_plan: &str) -> String {
+    let mut other_plan = false;
+    let mut confirm = |plan: &str| {
+        let same = plan == shown_plan;
+        other_plan |= !same;
+        same
+    };
+    let message = match kind {
+        Kind::Setup => {
+            match setup::setup(&paths.settings, &paths.exe, &paths.state, &mut confirm) {
+                Ok(SetupOutcome::Changed { backup }) => {
+                    let mut text = "The bridge is set up.".to_owned();
+                    if let Some(backup) = backup {
+                        text.push_str(&format!(
+                            " A copy of the old settings is {}.",
+                            backup.display()
+                        ));
+                    }
+                    text
                 }
-                text
+                Ok(SetupOutcome::AlreadySetUp) => "The bridge is already set up.".to_owned(),
+                Ok(SetupOutcome::Declined) => "Nothing was changed.".to_owned(),
+                Err(error) => format!("The bridge could not be set up: {error}"),
             }
-            Ok(SetupOutcome::AlreadySetUp) => "The bridge is already set up.".to_owned(),
-            Ok(SetupOutcome::Declined) => "Nothing was changed.".to_owned(),
-            Err(error) => format!("The bridge could not be set up: {error}"),
-        },
-        Kind::Remove => match setup::remove(&paths.settings, &paths.state, &mut yes) {
+        }
+        Kind::Remove => match setup::remove(&paths.settings, &paths.state, &mut confirm) {
             Ok(RemoveOutcome::Removed { backup }) => format!(
                 "The bridge is removed. A copy of the old settings is {}.",
                 backup.display()
@@ -116,6 +128,11 @@ pub fn perform(kind: Kind, paths: &Paths) -> String {
             Ok(RemoveOutcome::Declined) => "Nothing was changed.".to_owned(),
             Err(error) => format!("The bridge could not be removed: {error}"),
         },
+    };
+    if other_plan {
+        SETTINGS_CHANGED.to_owned()
+    } else {
+        message
     }
 }
 
@@ -142,7 +159,7 @@ pub fn show(ctx: &Context, dialog: &mut Dialog, paths: Option<&Paths>) -> bool {
                 ui.horizontal(|ui| {
                     if ui.button("Yes").clicked() {
                         next = Some(Stage::Done(match paths {
-                            Some(paths) => perform(dialog.kind, paths),
+                            Some(paths) => perform(dialog.kind, paths, plan),
                             None => "The settings folder cannot be found.".to_owned(),
                         }));
                     }
@@ -193,6 +210,14 @@ mod tests {
         fs::write(&paths.settings, value.to_string()).unwrap();
     }
 
+    /// What the person is shown, then agrees to.
+    fn agreed_plan(kind: Kind, paths: &Paths) -> String {
+        match prepare(kind, paths).stage {
+            Stage::Ask(plan) => plan,
+            Stage::Done(text) => panic!("expected a question, got: {text}"),
+        }
+    }
+
     fn json_of(paths: &Paths) -> Value {
         serde_json::from_slice(&fs::read(&paths.settings).unwrap()).unwrap()
     }
@@ -223,7 +248,8 @@ mod tests {
     fn req_023_yes_sets_up_the_bridge_and_a_second_look_says_it_is_done() {
         let f = fixture();
         put(&f.paths, &json!({"model": "x"}));
-        let message = perform(Kind::Setup, &f.paths);
+        let plan = agreed_plan(Kind::Setup, &f.paths);
+        let message = perform(Kind::Setup, &f.paths, &plan);
         assert!(message.starts_with("The bridge is set up."), "{message}");
         assert!(message.contains("A copy of the old settings"), "{message}");
         let settings = json_of(&f.paths);
@@ -246,10 +272,10 @@ mod tests {
         let f = fixture();
         let old = json!({"statusLine": {"type": "command", "command": "ccusage"}});
         put(&f.paths, &old);
-        perform(Kind::Setup, &f.paths);
-        let dialog = prepare(Kind::Remove, &f.paths);
-        assert!(matches!(dialog.stage, Stage::Ask(_)), "{:?}", dialog.stage);
-        let message = perform(Kind::Remove, &f.paths);
+        let setup_plan = agreed_plan(Kind::Setup, &f.paths);
+        perform(Kind::Setup, &f.paths, &setup_plan);
+        let plan = agreed_plan(Kind::Remove, &f.paths);
+        let message = perform(Kind::Remove, &f.paths, &plan);
         assert!(message.starts_with("The bridge is removed."), "{message}");
         assert_eq!(json_of(&f.paths), old);
     }
@@ -292,7 +318,7 @@ mod tests {
             panic!("a path with a space must stop at once");
         };
         assert!(text.contains("without spaces"), "{text}");
-        let message = perform(Kind::Setup, &f.paths);
+        let message = perform(Kind::Setup, &f.paths, "any plan");
         assert!(
             message.starts_with("The bridge could not be set up:"),
             "{message}"
@@ -310,5 +336,49 @@ mod tests {
         };
         assert!(text.contains("cannot be parsed"), "{text}");
         assert_eq!(fs::read_to_string(&f.paths.settings).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn req_023_nothing_is_changed_when_the_settings_changed_after_the_question() {
+        let f = fixture();
+        put(
+            &f.paths,
+            &json!({"statusLine": {"type": "command", "command": "ccusage"}}),
+        );
+        let plan = agreed_plan(Kind::Setup, &f.paths);
+        // Someone else changes the status line while the question is open.
+        let theirs = json!({"statusLine": {"type": "command", "command": "other-tool"}});
+        put(&f.paths, &theirs);
+        let message = perform(Kind::Setup, &f.paths, &plan);
+        assert_eq!(message, SETTINGS_CHANGED);
+        assert_eq!(
+            json_of(&f.paths),
+            theirs,
+            "the other change is left as it is"
+        );
+        assert!(
+            !f.paths.state.exists(),
+            "no state file for a plan nobody agreed to"
+        );
+    }
+
+    #[test]
+    fn req_023_the_removal_is_stopped_too_when_the_stored_status_line_changed() {
+        let f = fixture();
+        put(
+            &f.paths,
+            &json!({"statusLine": {"type": "command", "command": "ccusage"}}),
+        );
+        let setup_plan = agreed_plan(Kind::Setup, &f.paths);
+        perform(Kind::Setup, &f.paths, &setup_plan);
+        let removal_plan = agreed_plan(Kind::Remove, &f.paths);
+        let changed = r#"{"v":1,"previous_status_line":{"type":"command","command":"changed"}}"#;
+        fs::write(&f.paths.state, changed).unwrap();
+        let before = fs::read(&f.paths.settings).unwrap();
+        assert_eq!(
+            perform(Kind::Remove, &f.paths, &removal_plan),
+            SETTINGS_CHANGED
+        );
+        assert_eq!(fs::read(&f.paths.settings).unwrap(), before);
     }
 }

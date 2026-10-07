@@ -164,6 +164,8 @@ struct Cockpit {
     dialog: Option<settings_view::Draft>,
     /// The dialog for setting up or removing the bridge, while it is open.
     bridge_dialog: Option<bridge_view::Dialog>,
+    /// The files of the open bridge dialog, found when it was opened.
+    bridge_paths: Option<bridge_view::Paths>,
     /// Whether the window is on top at the moment, as far as this program has set it.
     on_top: bool,
 }
@@ -187,6 +189,7 @@ impl Cockpit {
             expected: None,
             dialog: None,
             bridge_dialog: None,
+            bridge_paths: None,
         }
     }
 
@@ -280,13 +283,21 @@ impl Cockpit {
     /// Looks at what would change and opens the dialog. In the compact view the window is too
     /// small for it, so the detailed view is shown first.
     fn open_bridge_dialog(&mut self, ctx: &egui::Context, kind: bridge_view::Kind) {
-        self.bridge_dialog = Some(match self.bridge_paths() {
-            Ok(paths) => bridge_view::prepare(kind, &paths),
-            Err(message) => bridge_view::Dialog {
-                kind,
-                stage: bridge_view::Stage::Done(message),
-            },
-        });
+        let (paths, dialog) = match self.bridge_paths() {
+            Ok(paths) => {
+                let dialog = bridge_view::prepare(kind, &paths);
+                (Some(paths), dialog)
+            }
+            Err(message) => (
+                None,
+                bridge_view::Dialog {
+                    kind,
+                    stage: bridge_view::Stage::Done(message),
+                },
+            ),
+        };
+        self.bridge_paths = paths;
+        self.bridge_dialog = Some(dialog);
         if self.view == View::Compact {
             self.switch_view(ctx);
         }
@@ -298,8 +309,7 @@ impl Cockpit {
             return;
         };
         // Without paths only a message that is already there can be shown.
-        let paths = self.bridge_paths().ok();
-        let close = bridge_view::show(ctx, &mut dialog, paths.as_ref());
+        let close = bridge_view::show(ctx, &mut dialog, self.bridge_paths.as_ref());
         if !close {
             self.bridge_dialog = Some(dialog);
         }
