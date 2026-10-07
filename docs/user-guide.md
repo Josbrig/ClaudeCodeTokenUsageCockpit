@@ -2,7 +2,7 @@
 
 This guide is for someone who has never seen the project. It shows how to start the cockpit, connect it to Claude Code, read every value, and remove everything again.
 
-> **Status.** The program is under development and there is no published release yet. Where this guide describes a download, it describes what a release is planned to look like. Parts that were only tried on Windows say so; the text for Linux and macOS follows the documentation of those systems and has **not been tried yet**.
+> **Status.** The program is under development. **No release has been published yet: there is nothing to download and no `SHA256SUMS` file exists.** Where this guide describes a download, it describes what a release is planned to look like; until then build the program yourself (see the README). Parts that were only tried on Windows say so; the text for Linux and macOS follows the documentation of those systems and has **not been tried yet**.
 
 ## What the cockpit does
 
@@ -12,7 +12,7 @@ Nothing is sent anywhere. The cockpit uses no network and no tokens.
 
 ## Download and start
 
-1. **Download.** When a release exists, the file for your system is on the *Releases* page of the project on GitHub, named `usage-cockpit-<version>-<system>` (with `.exe` on Windows), together with a file `SHA256SUMS`. Compare the checksum of your download with the entry in `SHA256SUMS` before you start it.
+1. **Get the program.** *Planned for a release:* the file for your system will be on the *Releases* page of the project on GitHub, named `usage-cockpit-<version>-<system>` (with `.exe` on Windows), together with a file `SHA256SUMS`; compare the checksum of your download with the entry there before you start it. *Today:* build it with `cargo build --release` as described in the README.
 2. **Put it in a folder without spaces**, for example `C:\Tools\usage-cockpit\` on Windows or `~/bin/` on Linux and macOS. The bridge command that Claude Code runs contains the path of the program, and a space in it would need quoting that not every shell accepts. The setup refuses a path with a space and tells you so.
 3. **Start it.**
    - **Windows** (tried): double-click `usage-cockpit.exe`. The program is not signed yet, so Windows SmartScreen may say that it protected your PC. Choose *More info*, then *Run anyway*, if you trust the download.
@@ -56,7 +56,7 @@ The cockpit also *reads* the transcript files of Claude Code (`projects/**/*.jso
 
 ## What the values mean
 
-The window shows one row per window: label (`5h`, `7d`), a flag when it is the *binding* limit, a bar, the state, the used share, and the time until the reset. The vertical mark on the bar is the **target**: where you would be with an even pace. The detailed view (button at the lower right of the compact view, or key `D`) shows everything below. Every state has a symbol and a word, so colour is never the only hint.
+The window shows one row per window: label (`5h`, `7d`), a flag when it is the *binding* limit, a bar, the state, the used share, and the time until the reset. The vertical mark on the bar is the **target**: where you would be with an even pace. The detailed view shows everything below. You reach it with the small button with two arrows at the lower right of the compact view (its hover text is *Detailed view (D)*) or with the key `D`; the button *Compact view (D)* at the bottom of the detailed view, or `D` again, takes you back. Every state has a symbol and a word, so colour is never the only hint.
 
 | Value | Meaning |
 |---|---|
@@ -72,13 +72,20 @@ The window shows one row per window: label (`5h`, `7d`), a flag when it is the *
 | **Recommended rate** | The rate that would use up the quota exactly at the reset. |
 | **Binding limit** | Of the two windows, the one whose limit you would reach first (marked with a flag); none if neither would be reached before its reset. |
 | **Weekly plan** | The weekly quota spread over the 5-hour windows that remain until the weekly reset: `10 windows left · 6.0% per window`. |
-| **Data age / stale** | How old the newest record is (`updated 12 s ago`). After 10 minutes (a setting), or when a record that could not be read arrived after the newest good one, the values stay but are marked **stale** (grey, pause symbol, dashed outline). |
+| **Data age / stale** | How old the newest record is (`updated 12 s ago`). After 10 minutes (a setting), or when a record that could not be read arrived after the newest good one, the values stay but are marked **stale**: the bottom line reads `stale, 14 min old`, the rows are grey with a pause symbol, and in the compact view they also get a dashed outline. |
 | **From Claude Code** | Model, context window use and session cost of the newest record, as Claude Code reports them. |
 | **Transcript statistics** | Tokens per model and per day from the transcript files, the cache share, and *tokens per percentage point*, which is always labelled an **estimate**. |
 | **Previous periods** | The last three finished periods of each window with their end and final used share. |
 | **Chart** | Per window: your used share over the current period, the even-pace line, and now. |
 
-The exact formulas are in [docs/concept.md](concept.md), section 7.
+The detailed view also has these parts:
+
+- **Context used** is how full the context window of the session is; **Session cost** is the cost of the session in US dollars as Claude Code estimates it. Both come from the newest record and read *no data* when Claude Code did not send them.
+- **This window's limit binds first.** appears under the state of the window that is the binding limit.
+- **Transcript tables.** *Per model* and *Per day* (newest first, up to 35 days) list for each model or day the tokens in four columns: **Input** (input tokens that were not served from the cache), **Output**, **Cache write** (input tokens written to the cache) and **Cache read** (input tokens read from the cache). **Cache share** is (cache write + cache read) divided by (input + cache write + cache read) over everything listed; its formula is in [docs/concept.md](concept.md), section 8. The line *transcript statistics not available* means that no transcript file could be read.
+- **Footer.** The version and commit of the program (the same as `usage-cockpit --version`), a link *Licence notices* to the licences of the components used, and the buttons *Settings*, *Set up bridge*, *Remove bridge* and *Compact view (D)*.
+
+The exact formulas of sections up to *Previous periods* are in [docs/concept.md](concept.md), section 7; the transcript statistics are described in section 8.
 
 **Settings** (button in the detailed view): tolerance band (0 to 50 points), stale threshold (60 to 86,400 seconds), rate period (300 to 7,200 seconds), always on top, and the start view. They are saved in `settings.toml` and count at once. The window also remembers its position, size and view.
 
@@ -101,7 +108,7 @@ The exact formulas are in [docs/concept.md](concept.md), section 7.
 
 ## Troubleshooting
 
-- **The window says *No data yet*.** Set up the bridge, then use Claude Code: data arrives after its next response. If you set it up while Claude Code was running, start a new session.
+- **The window says *No data yet*.** Set up the bridge, then use Claude Code: data arrives after its next response. A Claude Code session that was already running may keep using the old settings; if no data arrives, start a new session.
 - **The window says *Claude Code sent no usage limits*.** Claude Code delivers limits only for Pro and Max subscriptions and only after the first response of a session.
 - **Values are grey and say *stale*.** The newest record is older than the threshold, or a record that could not be read arrived. Use Claude Code once; check the log (`log.txt` in the data folder).
 - **A window says *Window reset* instead of values.** The reset time has passed and no newer record has arrived yet; use Claude Code.
