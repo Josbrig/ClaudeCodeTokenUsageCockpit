@@ -10,9 +10,10 @@ use std::time::Duration;
 
 use cockpit_core::paths;
 use cockpit_core::settings::Settings;
-use eframe::egui;
+use eframe::egui::{self, Vec2};
 
 mod compact;
+mod detailed;
 mod state;
 mod theme;
 
@@ -46,7 +47,10 @@ pub fn run(settings: &Settings, data_dir: &Path) -> eframe::Result<()> {
             let state = AppState::new(&data_dir, settings, paths::claude_dir(), move || {
                 context.request_repaint()
             });
-            Ok(Box::new(Cockpit { state }))
+            Ok(Box::new(Cockpit {
+                state,
+                view: View::Compact,
+            }))
         }),
     )
 }
@@ -80,22 +84,53 @@ fn viewport(settings: &Settings) -> egui::ViewportBuilder {
     }
 }
 
+/// Which of the two views is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum View {
+    Compact,
+    Detailed,
+}
+
+impl View {
+    /// The other view.
+    fn other(self) -> Self {
+        match self {
+            Self::Compact => Self::Detailed,
+            Self::Detailed => Self::Compact,
+        }
+    }
+
+    /// Default window size of the view in logical pixels.
+    fn size(self) -> [f32; 2] {
+        match self {
+            Self::Compact => DEFAULT_SIZE,
+            Self::Detailed => detailed::DEFAULT_SIZE,
+        }
+    }
+}
+
 /// The window: the data and what the view model says about it.
 struct Cockpit {
     state: AppState,
+    view: View,
 }
 
 impl eframe::App for Cockpit {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.drain();
-        let view = self.state.view_model_now();
-        let mut action = compact::Action::default();
-        egui::CentralPanel::default().show(ctx, |ui| {
-            action = compact::show(ui, view);
+        let model = self.state.view_model_now();
+        let mut switch = false;
+        egui::CentralPanel::default().show(ctx, |ui| match self.view {
+            View::Compact => switch = compact::show(ui, model).switch_view,
+            View::Detailed => switch = detailed::show(ui, model).switch_view,
         });
-        if action.switch_view {
-            // Switching to the detailed view follows in a later issue.
-            log::info!("switch to the detailed view requested (not available yet)");
+        if switch {
+            // Only the plain switch with the default size of each view; remembering the view
+            // and the window position comes with the settings issue.
+            self.view = self.view.other();
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::from(
+                self.view.size(),
+            )));
         }
         ctx.request_repaint_after(REPAINT_EVERY);
     }
