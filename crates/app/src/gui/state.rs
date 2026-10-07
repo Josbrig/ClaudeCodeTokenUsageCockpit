@@ -279,6 +279,12 @@ impl AppState {
         changed
     }
 
+    /// Takes new settings over; the view model is rebuilt with them at the next frame.
+    pub fn set_settings(&mut self, settings: Settings) {
+        self.settings = settings;
+        self.version += 1;
+    }
+
     /// The view model for `now_ms`; rebuilt when the data or the second changed.
     pub fn view_model(&mut self, now_ms: i64) -> &ViewModel {
         let second = now_ms.div_euclid(1000);
@@ -537,5 +543,32 @@ mod tests {
             assert!(Instant::now() < deadline, "the history was not pruned");
             thread::sleep(Duration::from_millis(25));
         }
+    }
+
+    #[test]
+    fn req_024_new_settings_change_the_view_model_at_once() {
+        use cockpit_core::viewmodel::WindowView;
+        let dir = tempfile::tempdir().unwrap();
+        // 60 % used at 40 % elapsed: over pace with the default tolerance of 5 points.
+        let now_ms = 1_738_400_000_000;
+        let mut r = record(now_ms, 60.0);
+        r.five_hour.as_mut().unwrap().resets_at = now_ms / 1000 + 3 * 3600;
+        store::write_latest(dir.path(), &r).unwrap();
+        let mut state = AppState::new(dir.path(), Settings::default(), None, || {});
+        let label = |state: &mut AppState| match &state.view_model(now_ms).five_hour {
+            WindowView::Data(data) => data.label,
+            WindowView::NoData { text } => panic!("no values: {text}"),
+        };
+        assert_eq!(label(&mut state), "over");
+        let wide = Settings {
+            tolerance_pp: 30.0,
+            ..Settings::default()
+        };
+        state.set_settings(wide);
+        assert_eq!(
+            label(&mut state),
+            "on pace",
+            "the new tolerance counts in the same second"
+        );
     }
 }

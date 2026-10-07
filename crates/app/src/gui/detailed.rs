@@ -28,6 +28,8 @@ const ICON_SIZE: f32 = 10.0;
 pub struct Action {
     /// The button "Compact view" or the key `D` was used.
     pub switch_view: bool,
+    /// The button "Settings" was used.
+    pub open_settings: bool,
 }
 
 /// Version and commit as shown in the footer, for example `0.1.0 (a1b2c3d)`.
@@ -244,9 +246,14 @@ fn footer(ui: &mut Ui, action: &mut Action) {
         ui.label(format!("usage-cockpit {}", version_text()));
         ui.hyperlink_to("Licence notices", LICENCE_NOTICES_URL);
     });
-    if ui.button("Compact view (D)").clicked() {
-        action.switch_view = true;
-    }
+    ui.horizontal(|ui| {
+        if ui.button("Settings").clicked() {
+            action.open_settings = true;
+        }
+        if ui.button("Compact view (D)").clicked() {
+            action.switch_view = true;
+        }
+    });
 }
 
 #[cfg(test)]
