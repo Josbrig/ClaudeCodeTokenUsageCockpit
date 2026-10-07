@@ -11,7 +11,9 @@
   The script first looks at what is there and prints a table. With -CheckOnly it stops there and
   installs nothing. Otherwise it says what it would install, asks, and installs only what is
   missing (winget is used; rustup installs the toolchain). It can be run again at any time. It
-  contains no secrets and changes nothing outside the tools' own locations.
+  contains no secrets. Programs are installed for the current user where the package allows
+  it; the Microsoft C++ Build Tools can only be installed for the whole computer and ask for
+  administrator consent (a Windows prompt appears).
 
 .PARAMETER CheckOnly
   Only report; install nothing.
@@ -77,8 +79,9 @@ function Format-States {
 
 # The winget command line (as an argument list) that installs a tool.
 function Get-WingetArguments {
-    param([string]$Id, [string]$Override)
+    param([string]$Id, [string]$Override, [switch]$UserScope)
     $arguments = @('install', '--id', $Id, '--exact', '--accept-source-agreements', '--accept-package-agreements')
+    if ($UserScope) { $arguments += @('--scope', 'user') }
     if ($Override) { $arguments += @('--override', $Override) }
     return $arguments
 }
@@ -141,7 +144,7 @@ function Get-ToolchainState {
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     $installed = @(& $rustup toolchain list 2>&1 | ForEach-Object { "$_" })
-    $match = $installed | Where-Object { $_ -like "$Channel-*" } | Select-Object -First 1
+    $match = $installed | Where-Object { $_ -like "$Channel-*-windows-msvc*" } | Select-Object -First 1
     if (-not $match) { return $null }
     # rustfmt and clippy must be there as well
     $components = @(& $rustup component list --toolchain $Channel --installed 2>&1 | ForEach-Object { "$_" })
@@ -158,35 +161,36 @@ function Get-States {
     $states = @(
         [pscustomobject]@{
             Name = 'rustup'; Present = [bool](Find-Program 'rustup')
-            Version = (Get-ProgramVersion 'rustup'); Hint = 'install with winget (Rustlang.Rustup)'
-            WingetId = 'Rustlang.Rustup'; Override = $null; Kind = 'winget'
+            Version = (Get-ProgramVersion 'rustup'); Hint = 'install with winget (Rustlang.Rustup), without a default toolchain'
+            WingetId = 'Rustlang.Rustup'; Override = '-y --default-toolchain none --profile minimal'; Kind = 'winget'
+            Program = 'rustup'; PerUser = $true
         },
         [pscustomobject]@{
             Name = "Rust toolchain $channelText"; Present = $false
             Version = $null; Hint = 'install with rustup (with rustfmt and clippy)'
-            WingetId = $null; Override = $null; Kind = 'toolchain'
+            WingetId = $null; Override = $null; Kind = 'toolchain'; Program = $null; PerUser = $false
         },
         [pscustomobject]@{
             Name = 'Microsoft C++ Build Tools'; Present = $false
             Version = $null; Hint = 'install with winget (Microsoft.VisualStudio.2022.BuildTools, workload C++)'
             WingetId = 'Microsoft.VisualStudio.2022.BuildTools'
             Override = '--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'
-            Kind = 'winget'
+            Kind = 'winget'; Program = $null; PerUser = $false
         },
         [pscustomobject]@{
             Name = 'Git'; Present = [bool](Find-Program 'git')
             Version = (Get-ProgramVersion 'git'); Hint = 'install with winget (Git.Git)'
-            WingetId = 'Git.Git'; Override = $null; Kind = 'winget'
+            WingetId = 'Git.Git'; Override = $null; Kind = 'winget'; Program = 'git'; PerUser = $true
         },
         [pscustomobject]@{
             Name = 'CMake'; Present = [bool](Find-Program 'cmake')
             Version = (Get-ProgramVersion 'cmake'); Hint = 'install with winget (Kitware.CMake)'
-            WingetId = 'Kitware.CMake'; Override = $null; Kind = 'winget'
+            WingetId = 'Kitware.CMake'; Override = $null; Kind = 'winget'; Program = 'cmake'; PerUser = $true
         },
         [pscustomobject]@{
             Name = 'Ninja'; Present = [bool](Find-Program 'ninja')
             Version = (Get-ProgramVersion 'ninja'); Hint = 'install with winget (Ninja-build.Ninja)'
-            WingetId = 'Ninja-build.Ninja'; Override = $null; Kind = 'winget'
+            WingetId = 'Ninja-build.Ninja'; Override = $null; Kind = 'winget'; Program = 'ninja'; PerUser = $true
         }
     )
     $toolchain = Get-ToolchainState $Channel
@@ -217,10 +221,25 @@ function Install-WithWinget {
     if (-not $winget) {
         throw "winget is not available. Install '$($Tool.Name)' by hand (id $($Tool.WingetId)), then run this script again."
     }
-    $arguments = Get-WingetArguments -Id $Tool.WingetId -Override $Tool.Override
-    Write-Host "winget $($arguments -join ' ')"
-    & winget @arguments
-    if ($LASTEXITCODE -ne 0) { throw "winget could not install $($Tool.Name) (exit code $LASTEXITCODE)." }
+    # For the current user first, where the package allows it; else for the whole computer.
+    $code = 1
+    if ($Tool.PerUser) {
+        $arguments = Get-WingetArguments -Id $Tool.WingetId -Override $Tool.Override -UserScope
+        Write-Host "winget $($arguments -join ' ')"
+        & winget @arguments | Out-Host
+        $code = $LASTEXITCODE
+    }
+    if ($code -ne 0) {
+        $arguments = Get-WingetArguments -Id $Tool.WingetId -Override $Tool.Override
+        Write-Host "winget $($arguments -join ' ')"
+        & winget @arguments | Out-Host
+        $code = $LASTEXITCODE
+    }
+    if ($code -ne 0) {
+        # winget also reports "already installed" with a code; a program that is there is fine.
+        if ($Tool.Program -and (Find-Program $Tool.Program)) { return }
+        throw "winget could not install $($Tool.Name) (exit code $code). If it is installed but not on the PATH, open a new terminal and run this script again."
+    }
 }
 
 function Install-Toolchain {
@@ -229,11 +248,16 @@ function Install-Toolchain {
     if (-not $rustup) { throw 'rustup is not installed yet; install it first (open a new terminal after that).' }
     $channelText = if ($Channel) { $Channel } else { 'stable' }
     Write-Host "rustup toolchain install $channelText --profile minimal -c rustfmt -c clippy"
-    & $rustup toolchain install $channelText --profile minimal -c rustfmt -c clippy
+    & $rustup toolchain install $channelText --profile minimal -c rustfmt -c clippy | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "rustup could not install the toolchain (exit code $LASTEXITCODE)." }
 }
 
+# The exit code of the script. It is a variable and not a return value, because the output of
+# the programs that are started would become part of a return value.
+$script:ExitCode = 0
+
 function Invoke-Setup {
+    $script:ExitCode = 0
     $channel = Get-ToolchainChannel (Join-Path $RepoRoot 'rust-toolchain.toml')
     $states = Get-States $channel
     Write-Host 'Development tools for usage-cockpit'
@@ -244,14 +268,16 @@ function Invoke-Setup {
     } elseif ($CheckOnly) {
         Write-Host ''
         Write-Host "$($plan.Count) missing. Nothing was installed (-CheckOnly). Run without -CheckOnly to install."
-        return 1
+        $script:ExitCode = 1
+        return
     } else {
         Write-Host ''
         Write-Host 'This would be installed:'
         foreach ($tool in $plan) { Write-Host "  - $($tool.Name): $($tool.Hint)" }
         if (-not (Confirm-Install 'Install the missing tools?')) {
             Write-Host 'Nothing was installed.'
-            return 1
+            $script:ExitCode = 1
+            return
         }
         foreach ($tool in $plan) {
             if ($tool.Kind -eq 'toolchain') { continue }
@@ -271,10 +297,13 @@ function Invoke-Setup {
             Write-Host 'Building once to prove that the setup works (cargo build) ...'
             Push-Location $RepoRoot
             try {
-                & cargo build
+                & cargo build | Out-Host
                 if ($LASTEXITCODE -ne 0) { throw "cargo build failed (exit code $LASTEXITCODE)." }
             } finally { Pop-Location }
             Write-Host 'The build works.'
+        } else {
+            Write-Host ''
+            Write-Host 'cargo was not found on this PATH, so the build was skipped. Open a new terminal and run the script again to check it.'
         }
     }
     Write-Host ''
@@ -282,10 +311,15 @@ function Invoke-Setup {
     Write-Host '  cargo fmt --all --check'
     Write-Host '  cargo clippy --all-targets -- -D warnings'
     Write-Host '  cargo test --all'
-    return 0
 }
 
 # Run only when the script is started, not when it is read by the tests (dot-sourced).
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-Setup)
+    try {
+        Invoke-Setup
+    } catch {
+        Write-Host "ERROR: $($_.Exception.Message)"
+        $script:ExitCode = 2
+    }
+    exit $script:ExitCode
 }

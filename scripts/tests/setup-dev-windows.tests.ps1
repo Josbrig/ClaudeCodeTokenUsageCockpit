@@ -64,7 +64,62 @@ Assert-Equal ((Get-WingetArguments -Id 'Git.Git') -join ' ') 'install --id Git.G
 $withOverride = Get-WingetArguments -Id 'X.Y' -Override '--passive'
 Assert-Equal ($withOverride[-2..-1] -join ' ') '--override --passive' 'winget arguments with an override'
 
+# ---- the winget scope
+Assert-Equal ((Get-WingetArguments -Id 'X.Y' -UserScope) -join ' ') 'install --id X.Y --exact --accept-source-agreements --accept-package-agreements --scope user' 'winget arguments for the current user'
+
+# ---- the flow of the script with the installers replaced by fakes (nothing is installed)
+function New-FakeStates {
+    param([bool[]]$Present)
+    $names = 'rustup', 'Rust toolchain', 'Microsoft C++ Build Tools', 'Git', 'CMake', 'Ninja'
+    for ($i = 0; $i -lt $names.Count; $i++) {
+        [pscustomobject]@{
+            Name = $names[$i]; Present = $Present[$i]; Version = 'v'; Hint = "install $($names[$i])"
+            WingetId = "Id.$i"; Override = $null; Kind = if ($i -eq 1) { 'toolchain' } else { 'winget' }
+            Program = $null; PerUser = $true
+        }
+    }
+}
+$script:installed = @()
+function Install-WithWinget { param([object]$Tool) $script:installed += $Tool.Name }
+function Install-Toolchain { param([string]$Channel) $script:installed += 'toolchain' }
+
+$SkipBuild = $true
+$allThere = @($true, $true, $true, $true, $true, $true)
+$oneMissing = @($true, $true, $true, $true, $true, $false)
+
+function Get-States { param([string]$Channel) return (New-FakeStates $script:fake) }
+
+$script:fake = $allThere
+$CheckOnly = $false; $Yes = $false
+Invoke-Setup | Out-Null
+Assert-Equal $script:ExitCode 0 'everything there: exit code 0'
+Assert-Equal $script:installed.Count 0 'everything there: nothing is installed'
+
+$script:fake = $oneMissing
+$CheckOnly = $true
+Invoke-Setup | Out-Null
+Assert-Equal $script:ExitCode 1 'check only with a missing tool: exit code 1'
+Assert-Equal $script:installed.Count 0 'check only installs nothing'
+
+$CheckOnly = $false; $Yes = $false
+function Confirm-Install { param([string]$Question) return $false }
+Invoke-Setup | Out-Null
+Assert-Equal $script:ExitCode 1 'declined: exit code 1'
+Assert-Equal $script:installed.Count 0 'declined installs nothing'
+
+function Confirm-Install { param([string]$Question) return $true }
+Invoke-Setup | Out-Null
+Assert-Equal $script:ExitCode 0 'agreed: exit code 0 although the installers print'
+Assert-Equal ($script:installed -join ',') 'Ninja' 'agreed: only the missing tool is installed'
+
+$script:installed = @()
+$script:fake = @($false, $false, $true, $true, $true, $true)
+Invoke-Setup | Out-Null
+Assert-Equal ($script:installed -join ',') 'rustup,toolchain' 'a missing rustup installs rustup, then the toolchain'
+
 # ---- the real computer: the check runs and every state has a name
+Remove-Item function:Get-States
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'setup-dev-windows.ps1')
 $real = Get-States $real
 Assert-Equal ($real.Count -ge 6) $true 'the real check lists all tools'
 Assert-Equal (@($real | Where-Object { -not $_.Name }).Count) 0 'every tool has a name'
