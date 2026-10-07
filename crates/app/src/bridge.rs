@@ -14,22 +14,63 @@ use cockpit_core::model::{Record, WindowSample};
 use cockpit_core::parse::parse_status_line;
 use cockpit_core::store;
 
+use crate::shell;
+
 /// Input larger than this is treated like malformed input.
 pub const MAX_INPUT_BYTES: u64 = 1024 * 1024;
 /// How long the bridge waits for the history lock before it skips the history line.
 pub const HISTORY_LOCK_WAIT: Duration = Duration::from_millis(200);
+/// How long the kept user status line command may run.
+pub const KEPT_COMMAND_TIMEOUT: Duration = Duration::from_secs(1);
 /// Printed when the input could not be used.
 pub const NO_DATA_TEXT: &str = "usage-cockpit: no data";
+/// File in the configuration directory that holds the status line replaced by the bridge.
+pub const BRIDGE_STATE_FILE: &str = "bridge-state.json";
 
 /// Runs the bridge once and returns the exit code, which is always 0.
 ///
-/// `config_dir` is not used yet; the kept-user-command feature needs it.
-pub fn run(stdin: impl Read, mut stdout: impl Write, data_dir: &Path, _config_dir: &Path) -> i32 {
-    let text = handle(read_input(stdin), now_ms(), data_dir);
+/// The record is stored first. Then the kept user command, if there is one, answers; if it does
+/// not succeed, the bridge prints its own text.
+pub fn run(stdin: impl Read, mut stdout: impl Write, data_dir: &Path, config_dir: &Path) -> i32 {
+    let input = read_input(stdin);
+    let text = handle(input.as_deref(), now_ms(), data_dir);
+    let kept = kept_command(config_dir).and_then(|command| {
+        shell::run_kept_command(
+            &command,
+            input.as_deref().unwrap_or_default(),
+            KEPT_COMMAND_TIMEOUT,
+        )
+    });
     // A closed or broken output must not change the result.
-    let _ = writeln!(stdout, "{text}");
+    let _ = match kept {
+        Some(output) => stdout.write_all(&output),
+        None => writeln!(stdout, "{text}"),
+    };
     let _ = stdout.flush();
     0
+}
+
+/// The previous status line command from `bridge-state.json`, if there is a usable one: the file
+/// parses, `previous_status_line` is an object of type `command` with a non-blank `command`.
+fn kept_command(config_dir: &Path) -> Option<String> {
+    let bytes = match std::fs::read(config_dir.join(BRIDGE_STATE_FILE)) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(error) => {
+            log::warn!("bridge: cannot read {BRIDGE_STATE_FILE}: {error}");
+            return None;
+        }
+    };
+    let Ok(state) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        log::warn!("bridge: {BRIDGE_STATE_FILE} cannot be parsed");
+        return None;
+    };
+    let previous = state.get("previous_status_line")?;
+    if previous.get("type")?.as_str()? != "command" {
+        return None;
+    }
+    let command = previous.get("command")?.as_str()?;
+    (!command.trim().is_empty()).then(|| command.to_owned())
 }
 
 /// Reads at most [`MAX_INPUT_BYTES`]; `None` if the input is larger or cannot be read.
@@ -42,9 +83,8 @@ fn read_input(stdin: impl Read) -> Option<Vec<u8>> {
     (buffer.len() as u64 <= MAX_INPUT_BYTES).then_some(buffer)
 }
 
-fn handle(input: Option<Vec<u8>>, received_at_ms: i64, data_dir: &Path) -> String {
+fn handle(input: Option<&[u8]>, received_at_ms: i64, data_dir: &Path) -> String {
     let record = input
-        .as_deref()
         .and_then(|bytes| std::str::from_utf8(bytes).ok())
         .and_then(|text| parse_status_line(text, received_at_ms).ok());
     match record {
@@ -129,6 +169,42 @@ mod tests {
         let mut out = Vec::new();
         let code = run(input.as_bytes(), &mut out, dir, dir);
         (code, String::from_utf8(out).unwrap())
+    }
+
+    fn state_dir(content: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(BRIDGE_STATE_FILE), content).unwrap();
+        dir
+    }
+
+    #[test]
+    fn req_012_kept_command_is_read_from_the_state_file() {
+        let usable = |json: &str| kept_command(state_dir(json).path());
+        let command =
+            r#"{"v":1,"previous_status_line":{"type":"command","command":"ccusage","padding":2}}"#;
+        assert_eq!(usable(command).as_deref(), Some("ccusage"));
+    }
+
+    #[test]
+    fn req_012_no_kept_command_for_unusable_state() {
+        let empty = tempfile::tempdir().unwrap();
+        assert_eq!(kept_command(empty.path()), None, "file missing");
+        for json in [
+            "",
+            "{ nope",
+            "[]",
+            r#"{"v":1}"#,
+            r#"{"v":1,"previous_status_line":null}"#,
+            r#"{"v":1,"previous_status_line":"ccusage"}"#,
+            r#"{"v":1,"previous_status_line":{"type":"text","command":"x"}}"#,
+            r#"{"v":1,"previous_status_line":{"command":"x"}}"#,
+            r#"{"v":1,"previous_status_line":{"type":"command"}}"#,
+            r#"{"v":1,"previous_status_line":{"type":"command","command":""}}"#,
+            r#"{"v":1,"previous_status_line":{"type":"command","command":"  "}}"#,
+            r#"{"v":1,"previous_status_line":{"type":"command","command":5}}"#,
+        ] {
+            assert_eq!(kept_command(state_dir(json).path()), None, "{json:?}");
+        }
     }
 
     #[test]
