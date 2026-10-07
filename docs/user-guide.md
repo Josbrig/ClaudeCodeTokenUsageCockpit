@@ -77,7 +77,7 @@ The window shows *No data yet* until Claude Code has delivered data: set up the 
 
 ### 4.1 Set up the bridge
 
-**In the window (recommended).** Under *No data yet*, press **Set up bridge**; or open the detailed view and press **Set up bridge** at the bottom. A dialog shows exactly what will change: the file (`settings.json` of Claude Code), the new command, where your old status line is kept, and that a backup is made first (if the file does not exist yet, it is created and there is nothing to back up). It asks *Change the Claude Code settings?*; press **Yes** to go on or **No** to change nothing. Afterwards the dialog tells you the result (*The bridge is set up.*) and where the backup is, and you press **OK**. If the bridge is already set up, it says *The bridge is already set up; nothing to change.* If the settings file changed while the dialog was open, it says so and changes nothing: try again.
+**In the window (recommended).** Under *No data yet*, press **Set up bridge**; or open the detailed view and press **Set up bridge** at the bottom. A dialog shows exactly what will change: the file (`settings.json` of Claude Code), the new command, where your old status line is kept, and that a backup is made first (if the file does not exist yet, the dialog says that it will be created and that there is nothing to back up). It asks *Change the Claude Code settings?*; press **Yes** to go on or **No** to change nothing. Afterwards the dialog tells you the result (*The bridge is set up.*) and where the backup is, and you press **OK**. If the bridge is already set up, it says *The bridge is already set up; nothing to change.* If the settings file changed while the dialog was open, it says so and changes nothing: try again.
 
 **On the command line.** `usage-cockpit setup-bridge` shows the same plan and asks `Change Claude Code settings? [y/N]`. On Windows the command line cannot ask; use `usage-cockpit setup-bridge --yes` or use the window. `--yes` skips the question on every system.
 
@@ -307,4 +307,4 @@ The program also *reads* the transcript files of Claude Code (`projects/**/*.jso
 - The saved window position is not checked against your monitors: if you unplug a monitor, the window may open outside the visible area (see *Troubleshooting*).
 - The percentages come from Claude Code as they are; the token counts of the transcript statistics are an estimate and not an invoice.
 - Not tried yet: Linux and macOS, a Windows without development tools, the light theme, display scaling other than 100 %, several monitors.
-- The settings *Start view* and the remembered view overwrite each other (issue #147); the plan text of *Set up bridge* mentions a backup even when there is no settings file (issue #148).
+- The settings *Start view* and the remembered view overwrite each other (issue #147).
