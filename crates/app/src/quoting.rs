@@ -10,21 +10,24 @@
 //! This file has no dependency on the rest of the program: it is compiled and tested on every
 //! system, and the integration tests include it with `#[path]` to check it against a real shell.
 
-/// Characters that need no quoting in a word for `sh`.
+/// Characters that need no quoting in a word for `sh`. A `~` is safe inside a word (the short
+/// names of Windows have one) but not at its start, where `sh` would expand it.
 fn is_safe(c: char) -> bool {
-    c.is_ascii_alphanumeric() || "_-./:@%+=,".contains(c)
+    c.is_ascii_alphanumeric() || "_-./:@%+=,~".contains(c)
 }
 
 /// `text` as one word for `sh`: unchanged if it has only safe characters, otherwise in single
 /// quotes, with a single quote inside written as `'\''`.
 pub fn sh_quote(text: &str) -> String {
-    if !text.is_empty() && text.chars().all(is_safe) {
+    if !text.is_empty() && !text.starts_with('~') && text.chars().all(is_safe) {
         return text.to_owned();
     }
     format!("'{}'", text.replace('\'', "'\\''"))
 }
 
-/// The first word of `command`, read the way a shell reads it, and the text after it.
+/// The first word of `command` and the text after it, read the way a shell reads the forms this
+/// program writes (plain, single quotes, double quotes, `\'`); other shell syntax such as a
+/// backslash before a space is not interpreted.
 ///
 /// Leading white space is skipped. Inside single or double quotes everything is taken as it is;
 /// outside quotes `\'` is a single quote and every other backslash stays a backslash (an old
@@ -77,6 +80,9 @@ mod tests {
         assert_eq!(sh_quote(""), "''");
         assert_eq!(sh_quote("a\"b"), "'a\"b'");
         assert_eq!(sh_quote("a\\b"), "'a\\b'");
+        // a tilde is safe inside a word (short names of Windows) but not at the start
+        assert_eq!(sh_quote("C:/MYTOOL~1/x"), "C:/MYTOOL~1/x");
+        assert_eq!(sh_quote("~root/x"), "'~root/x'");
     }
 
     #[test]
