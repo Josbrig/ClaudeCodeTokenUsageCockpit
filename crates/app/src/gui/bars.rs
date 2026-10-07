@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Bar charts of the transcript statistics (REQ-014 shown as a picture): the tokens per day.
+//! Bar charts of the transcript statistics (REQ-014 shown as a picture): the tokens per day
+//! and per model.
 //! The numbers come from the view model; the choice of what the bars show (the four token
 //! kinds differ by orders of magnitude) is kept while the window is open.
 
@@ -112,7 +113,9 @@ pub fn days(ui: &mut Ui, id: &str, days: &[(String, [u64; 4])], kind: Kind) {
                 },
             ),
         ])
-        .y_axis_formatter(|mark: GridMark, _range: &RangeInclusive<f64>| y_label(mark.value))
+        .custom_y_axes(vec![AxisHints::new_y().label(kind.label()).formatter(
+            |mark: GridMark, _range: &RangeInclusive<f64>| y_label(mark.value),
+        )])
         .show(ui, |plot_ui| {
             plot_ui.bar_chart(BarChart::new(kind.label(), bars).color(theme::UNDER));
         });
@@ -126,7 +129,7 @@ pub fn models(ui: &mut Ui, id: &str, models: &[(String, [u64; 4])], kind: Kind) 
         .iter()
         .enumerate()
         .map(|(row, (model, tokens))| {
-            Bar::new((count - 1 - row) as f64, tokens[kind.index()] as f64)
+            Bar::new(model_position(count, row), tokens[kind.index()] as f64)
                 .width(0.7)
                 .name(model.as_str())
         })
@@ -134,8 +137,9 @@ pub fn models(ui: &mut Ui, id: &str, models: &[(String, [u64; 4])], kind: Kind) 
     let names: Vec<String> = models
         .iter()
         .rev()
-        .map(|(model, _)| model.clone())
+        .map(|(model, _)| shorten_name(model))
         .collect();
+    let axis_name = kind.label();
     ui.label(RichText::new(format!("{} tokens per model", kind.label())).strong());
     Plot::new(id)
         .height(model_chart_height(count))
@@ -150,17 +154,23 @@ pub fn models(ui: &mut Ui, id: &str, models: &[(String, [u64; 4])], kind: Kind) 
         // Without this a chart of only zeros would get an axis from -17 to 17.
         .include_x(1.0)
         .y_grid_spacer(move |_: GridInput| row_marks(count))
-        .custom_y_axes(vec![AxisHints::new_y().formatter(
-            move |mark: GridMark, _range: &RangeInclusive<f64>| {
-                let position = mark.value.round();
-                if (mark.value - position).abs() < 1e-6 && position >= 0.0 {
-                    names.get(position as usize).cloned().unwrap_or_default()
-                } else {
-                    String::new()
-                }
-            },
+        // One label per row: the default spacing would fade the names out from about seven
+        // models on and drop them from fifteen.
+        .custom_y_axes(vec![
+            AxisHints::new_y().label_spacing(10.0..=16.0).formatter(
+                move |mark: GridMark, _range: &RangeInclusive<f64>| {
+                    let position = mark.value.round();
+                    if (mark.value - position).abs() < 1e-6 && position >= 0.0 {
+                        names.get(position as usize).cloned().unwrap_or_default()
+                    } else {
+                        String::new()
+                    }
+                },
+            ),
+        ])
+        .custom_x_axes(vec![AxisHints::new_x().label(axis_name).formatter(
+            |mark: GridMark, _range: &RangeInclusive<f64>| y_label(mark.value),
         )])
-        .x_axis_formatter(|mark: GridMark, _range: &RangeInclusive<f64>| y_label(mark.value))
         .show(ui, |plot_ui| {
             plot_ui.bar_chart(
                 BarChart::new(kind.label(), bars)
@@ -172,7 +182,26 @@ pub fn models(ui: &mut Ui, id: &str, models: &[(String, [u64; 4])], kind: Kind) 
 
 /// Height of the model chart: a row per model and room for the axis.
 pub fn model_chart_height(count: usize) -> f32 {
-    (count as f32 * ROW_HEIGHT + 40.0).clamp(80.0, 320.0)
+    (count as f32 * ROW_HEIGHT + 40.0).clamp(80.0, 640.0)
+}
+
+/// The position of the bar of row `row` (0 is the first row of the table) among `count`: the
+/// first row is the top bar, which is the highest position.
+pub fn model_position(count: usize, row: usize) -> f64 {
+    count.saturating_sub(1).saturating_sub(row) as f64
+}
+
+/// A model name for the axis: longer names are cut in the middle, so that the axis does not take
+/// the width of the window. The hover text of a bar has the whole name.
+pub fn shorten_name(name: &str) -> String {
+    const LIMIT: usize = 28;
+    let chars: Vec<char> = name.chars().collect();
+    if chars.len() <= LIMIT {
+        return name.to_owned();
+    }
+    let head: String = chars[..LIMIT / 2].iter().collect();
+    let tail: String = chars[chars.len() - (LIMIT / 2 - 1)..].iter().collect();
+    format!("{head}…{tail}")
 }
 
 /// One mark per model.
@@ -331,10 +360,29 @@ mod tests {
         assert_eq!(model_chart_height(0), 80.0);
         assert_eq!(model_chart_height(1), 80.0);
         assert_eq!(model_chart_height(7), 7.0 * ROW_HEIGHT + 40.0);
-        assert_eq!(model_chart_height(100), 320.0);
+        assert_eq!(model_chart_height(100), 640.0);
+        // the first row of the table is the top bar
+        assert_eq!(model_position(1, 0), 0.0);
+        assert_eq!(model_position(2, 0), 1.0);
+        assert_eq!(model_position(2, 1), 0.0);
+        assert_eq!(model_position(7, 0), 6.0);
+        assert_eq!(model_position(0, 0), 0.0, "no underflow");
         let positions: Vec<usize> = row_marks(3).iter().map(|m| m.value as usize).collect();
         assert_eq!(positions, [0, 1, 2]);
         assert!(row_marks(0).is_empty());
+    }
+
+    #[test]
+    fn req_014_long_model_names_are_cut_in_the_middle() {
+        assert_eq!(shorten_name("claude-opus-5"), "claude-opus-5");
+        let long = "a-very-long-model-name-with-many-parts-20251001";
+        let short = shorten_name(long);
+        assert_eq!(short.chars().count(), 28);
+        assert!(short.starts_with("a-very-long-mo"));
+        assert!(short.ends_with("-20251001"));
+        assert!(short.contains('…'));
+        assert_eq!(shorten_name(&"x".repeat(28)), "x".repeat(28));
+        assert_eq!(shorten_name("ä".repeat(40).as_str()).chars().count(), 28);
     }
 
     #[test]
