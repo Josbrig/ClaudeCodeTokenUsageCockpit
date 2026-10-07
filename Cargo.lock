@@ -781,6 +781,7 @@ dependencies = [
  "cockpit-core",
  "log",
  "predicates",
+ "serde_json",
  "tempfile",
  "windows-sys",
 ]

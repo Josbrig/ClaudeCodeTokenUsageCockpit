@@ -4,6 +4,7 @@
 mod bridge;
 mod cli;
 mod console;
+mod shell;
 
 use std::process::ExitCode;
 
