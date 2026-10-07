@@ -198,3 +198,26 @@ fn req_014_counts_saturate_instead_of_overflowing() {
     sum.add(&usage(5, 1, 0, 0));
     assert_eq!(sum, usage(u64::MAX, 1, 0, 0));
 }
+
+#[test]
+fn req_015_tokens_between_sums_a_closed_time_range() {
+    let stats = aggregate(&all_entries(), &Utc);
+    let t = |s: &str| {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .unwrap()
+            .timestamp_millis()
+    };
+    // msg_001 (350), msg_002 (335), msg_003 (12) on 1 March, msg_004 (260) on 2 March.
+    assert_eq!(stats.tokens_between(0, i64::MAX), 350 + 335 + 12 + 260);
+    assert_eq!(
+        stats.tokens_between(t("2026-03-01T10:00:05Z"), t("2026-03-01T10:01:30Z")),
+        350 + 335,
+        "both ends are included"
+    );
+    assert_eq!(
+        stats.tokens_between(t("2026-03-01T10:00:06Z"), t("2026-03-01T10:01:29Z")),
+        0
+    );
+    assert_eq!(stats.tokens_between(t("2026-03-03T00:00:00Z"), i64::MAX), 0);
+    assert_eq!(Stats::default().tokens_between(0, i64::MAX), 0);
+}
