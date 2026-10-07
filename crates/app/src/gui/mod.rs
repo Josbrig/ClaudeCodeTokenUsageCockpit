@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::autostart;
+use crate::uninstall;
 use cockpit_core::paths;
 use cockpit_core::settings::{self, Settings, StartView, WindowSettings};
 use eframe::egui::{self, Vec2};
@@ -20,6 +21,7 @@ mod detailed;
 mod settings_view;
 mod state;
 mod theme;
+mod uninstall_view;
 mod window_state;
 
 use state::AppState;
@@ -168,6 +170,8 @@ struct Cockpit {
     bridge_dialog: Option<bridge_view::Dialog>,
     /// The files of the open bridge dialog, found when it was opened.
     bridge_paths: Option<bridge_view::Paths>,
+    /// The dialog "Remove everything", while it is open, and the places it works on.
+    uninstall_dialog: Option<(uninstall_view::Dialog, uninstall::Locations)>,
     /// Number of times `update` ran; the line "window ready" is written at the second call.
     frames: u32,
     /// Whether the window is on top at the moment, as far as this program has set it.
@@ -194,6 +198,7 @@ impl Cockpit {
             dialog: None,
             bridge_dialog: None,
             bridge_paths: None,
+            uninstall_dialog: None,
             frames: 0,
         }
     }
@@ -308,6 +313,54 @@ impl Cockpit {
         }
     }
 
+    /// The places "Remove everything" works on.
+    fn uninstall_locations(&self) -> Result<uninstall::Locations, String> {
+        let bridge = self.bridge_paths()?;
+        let data_dir = paths::data_dir().map_err(|error| error.to_string())?;
+        let config_dir = self
+            .settings_path
+            .parent()
+            .ok_or_else(|| "The configuration folder cannot be found.".to_owned())?
+            .to_path_buf();
+        Ok(uninstall::Locations {
+            claude_settings: bridge.settings,
+            bridge_state: bridge.state,
+            data_dir,
+            config_dir,
+            exe: bridge.exe,
+            autostart_name: autostart::default_name().to_owned(),
+        })
+    }
+
+    /// Opens the dialog "Remove everything". In the compact view the window is too small for it,
+    /// so the detailed view is shown first.
+    fn open_uninstall_dialog(&mut self, ctx: &egui::Context) {
+        match self.uninstall_locations() {
+            Ok(loc) => {
+                self.uninstall_dialog = Some((uninstall_view::Dialog::new(&loc), loc));
+                if self.view == View::Compact {
+                    self.switch_view(ctx);
+                }
+            }
+            Err(message) => log::warn!("remove everything is not possible: {message}"),
+        }
+    }
+
+    /// Draws the dialog "Remove everything" if it is open.
+    fn show_uninstall_dialog(&mut self, ctx: &egui::Context) {
+        let Some((mut dialog, loc)) = self.uninstall_dialog.take() else {
+            return;
+        };
+        match uninstall_view::show(ctx, &mut dialog, &loc) {
+            uninstall_view::Outcome::Open => self.uninstall_dialog = Some((dialog, loc)),
+            uninstall_view::Outcome::Closed { exit } => {
+                if exit {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+        }
+    }
+
     /// Draws the bridge dialog if it is open.
     fn show_bridge_dialog(&mut self, ctx: &egui::Context) {
         let Some(mut dialog) = self.bridge_dialog.take() else {
@@ -386,6 +439,7 @@ impl eframe::App for Cockpit {
         let mut switch = false;
         let mut open_settings = false;
         let mut bridge_request = None;
+        let mut remove_everything = false;
         egui::CentralPanel::default().show(ctx, |ui| match self.view {
             View::Compact => {
                 let action = compact::show(ui, model);
@@ -398,6 +452,7 @@ impl eframe::App for Cockpit {
                 let action = detailed::show(ui, model);
                 switch = action.switch_view;
                 open_settings = action.open_settings;
+                remove_everything = action.remove_everything;
                 if action.setup_bridge {
                     bridge_request = Some(bridge_view::Kind::Setup);
                 } else if action.remove_bridge {
@@ -405,9 +460,14 @@ impl eframe::App for Cockpit {
                 }
             }
         });
-        let dialog_open = self.dialog.is_some() || self.bridge_dialog.is_some();
+        let dialog_open = self.dialog.is_some()
+            || self.bridge_dialog.is_some()
+            || self.uninstall_dialog.is_some();
         if open_settings && !dialog_open {
             self.dialog = Some(new_draft(&self.settings));
+        }
+        if remove_everything && !dialog_open {
+            self.open_uninstall_dialog(ctx);
         }
         if let Some(kind) = bridge_request.filter(|_| !dialog_open) {
             self.open_bridge_dialog(ctx, kind);
@@ -418,6 +478,7 @@ impl eframe::App for Cockpit {
         }
         self.show_dialog(ctx);
         self.show_bridge_dialog(ctx);
+        self.show_uninstall_dialog(ctx);
         self.track_window(ctx);
         // The first call of `update` is before the first frame is on the screen. A second one is
         // asked for at once; when it runs, the first frame has been drawn and shown, and the

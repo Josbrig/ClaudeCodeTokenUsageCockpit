@@ -33,6 +33,24 @@ pub enum Command {
         #[arg(long)]
         yes: bool,
     },
+    /// Undo everything the cockpit created outside its own file (bridge, start entry and, with
+    /// --remove-data, its data and configuration folders).
+    Uninstall {
+        /// Do not ask for confirmation.
+        #[arg(long)]
+        yes: bool,
+        /// Also delete the history, logs and settings.
+        #[arg(long)]
+        remove_data: bool,
+    },
+    /// Started by the window after "Remove everything": waits until that process ended, then
+    /// deletes the data and configuration folders.
+    #[command(hide = true)]
+    FinishUninstall {
+        /// Process id to wait for.
+        #[arg(long)]
+        after: u32,
+    },
 }
 
 #[cfg(test)]
@@ -69,6 +87,33 @@ mod tests {
             parse(&["remove-bridge", "--yes"]).unwrap().command,
             Some(Command::RemoveBridge { yes: true })
         );
+    }
+
+    #[test]
+    fn req_119_uninstall_takes_yes_and_remove_data() {
+        assert_eq!(
+            parse(&["uninstall"]).unwrap().command,
+            Some(Command::Uninstall {
+                yes: false,
+                remove_data: false
+            })
+        );
+        assert_eq!(
+            parse(&["uninstall", "--yes", "--remove-data"])
+                .unwrap()
+                .command,
+            Some(Command::Uninstall {
+                yes: true,
+                remove_data: true
+            })
+        );
+        assert_eq!(
+            parse(&["finish-uninstall", "--after", "42"])
+                .unwrap()
+                .command,
+            Some(Command::FinishUninstall { after: 42 })
+        );
+        assert!(parse(&["finish-uninstall"]).is_err());
     }
 
     #[test]

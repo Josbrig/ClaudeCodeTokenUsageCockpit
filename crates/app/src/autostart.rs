@@ -13,6 +13,10 @@ use std::path::Path;
 #[cfg_attr(not(windows), allow(dead_code))]
 pub const VALUE_NAME: &str = "UsageCockpit";
 
+/// Name of the entry when `USAGE_COCKPIT_HOME` is set.
+#[cfg_attr(not(windows), allow(dead_code))]
+const TEST_VALUE_NAME: &str = "UsageCockpitTestHome";
+
 /// What the system has for the cockpit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -65,14 +69,41 @@ fn classify(stored: Option<&str>, approved: Option<&[u8]>, exe: &Path) -> State 
     }
 }
 
+/// The name of the entry the program uses. With `USAGE_COCKPIT_HOME` set (a test setup, see the
+/// user guide) it is another one, so that a test never touches the entry of the person's own
+/// cockpit.
+pub fn default_name() -> &'static str {
+    if std::env::var_os(cockpit_core::paths::HOME_OVERRIDE_VAR).is_some() {
+        TEST_VALUE_NAME
+    } else {
+        imp::VALUE
+    }
+}
+
 /// The real state for `exe`.
 pub fn state(exe: &Path) -> Result<State, String> {
-    imp::state(imp::VALUE, exe)
+    state_for(default_name(), exe)
 }
 
 /// Switches the start entry on (for `exe`) or off and returns the state afterwards.
 pub fn set(exe: &Path, on: bool) -> Result<State, String> {
-    imp::set(imp::VALUE, exe, on)
+    set_for(default_name(), exe, on)
+}
+
+/// [`state`] for an entry of another name (tests use their own, never the real one).
+pub fn state_for(name: &str, exe: &Path) -> Result<State, String> {
+    imp::state(name, exe)
+}
+
+/// [`set`] for an entry of another name.
+pub fn set_for(name: &str, exe: &Path, on: bool) -> Result<State, String> {
+    imp::set(name, exe, on)
+}
+
+/// Removes the leftovers of a test entry (tests only).
+#[cfg(all(test, windows))]
+pub fn forget_test_entry(name: &str) {
+    imp::forget(name);
 }
 
 #[cfg(windows)]
