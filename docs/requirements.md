@@ -265,7 +265,7 @@ Terms used below:
 - Type: non-functional (performance) · Origin: derived ("small tool window") · Status: approved
 
 ### REQ-117 Portable use
-- Statement: The cockpit shall run from any folder without installation, and setting up the bridge shall work from any folder, including a folder whose path contains a space. This supplements REQ-023, which no longer excludes such paths.
+- Statement: The cockpit shall run from any folder without installation, and setting up the bridge shall work from any folder, including a folder whose path contains a space. REQ-023 is unchanged; until the Linux and macOS issues are done, the space in the path is handled on Windows only and refused with a message elsewhere.
 - Acceptance: A copy of the executable in a folder with a space in its path sets up the bridge, and the command written to the Claude Code settings runs the bridge through the shell Claude Code uses on that system and is recognised again by the removal.
 - Type: non-functional (usability) · Origin: owner decision 2026-10-07 · Status: draft
 

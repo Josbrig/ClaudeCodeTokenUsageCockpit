@@ -118,20 +118,32 @@ fn req_023_declining_the_question_leaves_the_file_identical() {
 /// Git for Windows bash, the shell Claude Code uses on Windows; `None` if it is not installed.
 #[cfg(windows)]
 fn git_bash() -> Option<std::path::PathBuf> {
-    ["ProgramFiles", "ProgramFiles(x86)"]
+    let machine = ["ProgramFiles", "ProgramFiles(x86)"]
         .iter()
         .filter_map(std::env::var_os)
-        .map(|base| Path::new(&base).join("Git").join("bin").join("bash.exe"))
-        .find(|path| path.is_file())
+        .map(|base| Path::new(&base).join("Git").join("bin").join("bash.exe"));
+    let user = std::env::var_os("LOCALAPPDATA").map(|base| {
+        Path::new(&base)
+            .join("Programs")
+            .join("Git")
+            .join("bin")
+            .join("bash.exe")
+    });
+    machine.chain(user).find(|path| path.is_file())
 }
 
 /// Runs `command` through Git Bash with a record on standard input; returns what it printed.
 #[cfg(windows)]
-fn run_in_bash(bash: &Path, command: &str, home: &Path) -> String {
-    let record = format!(
+fn record_text() -> String {
+    format!(
         "{{\"session_id\":\"t\",\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":23.5,\"resets_at\":{}}},\"seven_day\":{{\"used_percentage\":41.2,\"resets_at\":{}}}}}}}",
         4_102_444_800_u64, 4_102_444_800_u64
-    );
+    )
+}
+
+#[cfg(windows)]
+fn run_in_bash(bash: &Path, command: &str, home: &Path) -> String {
+    let record = record_text();
     let output = Command::new(bash)
         .args(["-c", command])
         .env("USAGE_COCKPIT_HOME", home)
@@ -168,6 +180,21 @@ fn req_117_the_bridge_runs_from_a_folder_with_a_space() {
         "5h 23.5% \u{b7} 7d 41.2%",
         "command: {command}"
     );
+
+    // the short form (no quote) also runs in Windows PowerShell
+    if !command.starts_with('"') {
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", command])
+            .env("USAGE_COCKPIT_HOME", home.path())
+            .write_stdin(record_text())
+            .output()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "5h 23.5% \u{b7} 7d 41.2%",
+            "powershell, command: {command}"
+        );
+    }
 
     // the quoted form, used when a volume has no 8.3 names, runs in bash as well
     let quoted = format!("\"{}\" bridge", exe.to_string_lossy().replace('\\', "/"));

@@ -235,6 +235,7 @@ fn is_bridge(status_line: &Value) -> bool {
         return false;
     };
     // `"<path with spaces>" bridge` or `<path> bridge`
+    let command = command.trim_start();
     let (program, rest) = match command.strip_prefix('"') {
         Some(quoted) => match quoted.split_once('"') {
             Some((program, rest)) => (program, rest),
@@ -245,6 +246,10 @@ fn is_bridge(status_line: &Value) -> bool {
             None => return false,
         },
     };
+    // after the closing quote a space must follow, else a shell sees one word
+    if command.starts_with('"') && !rest.starts_with(char::is_whitespace) {
+        return false;
+    }
     let mut parts = rest.split_whitespace();
     let (Some("bridge"), None) = (parts.next(), parts.next()) else {
         return false;
@@ -635,6 +640,8 @@ mod tests {
             "\"C:/My Tools/usage-cockpit.exe\" bridge x"
         )));
         assert!(!is_bridge(&line("\"C:/My Tools/usage-cockpit.exe\"")));
+        assert!(!is_bridge(&line("\"C:/My Tools/usage-cockpit.exe\"bridge")));
+        assert!(is_bridge(&line("  /opt/tools/usage-cockpit bridge")));
     }
 
     #[cfg(not(windows))]
