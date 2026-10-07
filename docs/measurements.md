@@ -48,11 +48,11 @@ The Windows row was measured on the machine the program was developed on (releas
 
 ### What the Windows executable needs
 
-The Windows build links the C runtime into the executable (`.cargo/config.toml`, `+crt-static`), so it does not need the Visual C++ runtime (`VCRUNTIME140.dll`) or the Universal C Runtime that a clean Windows may lack. The release build imports only DLLs that are part of Windows 10 and 11:
+The Windows x64 build (`x86_64-pc-windows-msvc`) links the C runtime into the executable (`.cargo/config.toml`, `+crt-static`), so it does not need the Visual C++ runtime (`VCRUNTIME140.dll`) or the Universal C Runtime that a clean Windows may lack. The release build imports only DLLs that are part of Windows 10 and 11:
 
 `advapi32`, `api-ms-win-core-synch-l1-2-0`, `bcryptprimitives`, `combase`, `dwmapi`, `gdi32`, `imm32`, `kernel32`, `ntdll`, `ole32`, `oleaut32`, `opengl32`, `shell32`, `shlwapi`, `uiautomationcore`, `user32`, `uxtheme`.
 
-To check it yourself, list the imports of `target\release\usage-cockpit.exe` with `dumpbin /dependents` (Visual Studio tools) or any PE viewer; `vcruntime140.dll` and `api-ms-win-crt-*` must not appear. Size of the executable: 6.9 MB before, 7.1 MB after. Not yet tried on a Windows without development tools (see the human issue for that).
+To check it yourself, list the imports of `target\release\usage-cockpit.exe` with `dumpbin /dependents` (Visual Studio tools) or any PE viewer; `vcruntime140.dll` and `api-ms-win-crt-*` must not appear. Size of the executable: 6,897,152 bytes before, 7,053,312 bytes after. A `RUSTFLAGS` environment variable overrides the setting in `.cargo/config.toml`; use the import list to check a build. Not yet tried on a Windows without development tools (see the human issue for that).
 
 Effect on the bridge: with the runtime inside the file the start is faster. The median of 100 bridge calls was 66 ms on the machine of the table below (101 ms before the change), and the same program with `--version` also 66 ms.
 
