@@ -12,6 +12,7 @@ use cockpit_core::paths;
 use cockpit_core::settings::{self, Settings, StartView, WindowSettings};
 use eframe::egui::{self, Vec2};
 
+mod bridge_view;
 mod compact;
 mod detailed;
 mod settings_view;
@@ -161,6 +162,8 @@ struct Cockpit {
     expected: Option<([f32; 2], Instant)>,
     /// The settings dialog, while it is open.
     dialog: Option<settings_view::Draft>,
+    /// The dialog for setting up or removing the bridge, while it is open.
+    bridge_dialog: Option<bridge_view::Dialog>,
     /// Whether the window is on top at the moment, as far as this program has set it.
     on_top: bool,
 }
@@ -183,6 +186,7 @@ impl Cockpit {
             debounce: Debounce::default(),
             expected: None,
             dialog: None,
+            bridge_dialog: None,
         }
     }
 
@@ -256,6 +260,51 @@ impl Cockpit {
         self.expected = Some((size, Instant::now() + Duration::from_secs(2)));
     }
 
+    /// The files and the program the bridge dialog works on.
+    fn bridge_paths(&self) -> Result<bridge_view::Paths, String> {
+        let claude = paths::claude_dir()
+            .ok_or_else(|| "The Claude Code settings folder cannot be found.".to_owned())?;
+        let exe = std::env::current_exe()
+            .map_err(|error| format!("The path of this program cannot be found: {error}"))?;
+        let config = self
+            .settings_path
+            .parent()
+            .ok_or_else(|| "The configuration folder cannot be found.".to_owned())?;
+        Ok(bridge_view::Paths {
+            settings: claude.join("settings.json"),
+            state: config.join("bridge-state.json"),
+            exe,
+        })
+    }
+
+    /// Looks at what would change and opens the dialog. In the compact view the window is too
+    /// small for it, so the detailed view is shown first.
+    fn open_bridge_dialog(&mut self, ctx: &egui::Context, kind: bridge_view::Kind) {
+        self.bridge_dialog = Some(match self.bridge_paths() {
+            Ok(paths) => bridge_view::prepare(kind, &paths),
+            Err(message) => bridge_view::Dialog {
+                kind,
+                stage: bridge_view::Stage::Done(message),
+            },
+        });
+        if self.view == View::Compact {
+            self.switch_view(ctx);
+        }
+    }
+
+    /// Draws the bridge dialog if it is open.
+    fn show_bridge_dialog(&mut self, ctx: &egui::Context) {
+        let Some(mut dialog) = self.bridge_dialog.take() else {
+            return;
+        };
+        // Without paths only a message that is already there can be shown.
+        let paths = self.bridge_paths().ok();
+        let close = bridge_view::show(ctx, &mut dialog, paths.as_ref());
+        if !close {
+            self.bridge_dialog = Some(dialog);
+        }
+    }
+
     /// Draws the settings dialog if it is open and takes its decision.
     fn show_dialog(&mut self, ctx: &egui::Context) {
         let Some(mut draft) = self.dialog.take() else {
@@ -317,22 +366,39 @@ impl eframe::App for Cockpit {
         let model = self.state.view_model_now();
         let mut switch = false;
         let mut open_settings = false;
+        let mut bridge_request = None;
         egui::CentralPanel::default().show(ctx, |ui| match self.view {
-            View::Compact => switch = compact::show(ui, model).switch_view,
+            View::Compact => {
+                let action = compact::show(ui, model);
+                switch = action.switch_view;
+                if action.setup_bridge {
+                    bridge_request = Some(bridge_view::Kind::Setup);
+                }
+            }
             View::Detailed => {
                 let action = detailed::show(ui, model);
                 switch = action.switch_view;
                 open_settings = action.open_settings;
+                if action.setup_bridge {
+                    bridge_request = Some(bridge_view::Kind::Setup);
+                } else if action.remove_bridge {
+                    bridge_request = Some(bridge_view::Kind::Remove);
+                }
             }
         });
-        if open_settings && self.dialog.is_none() {
+        let dialog_open = self.dialog.is_some() || self.bridge_dialog.is_some();
+        if open_settings && !dialog_open {
             self.dialog = Some(settings_view::Draft::from_settings(&self.settings));
         }
-        // While the settings dialog is open the views behind it do not react.
-        if switch && self.dialog.is_none() {
+        if let Some(kind) = bridge_request.filter(|_| !dialog_open) {
+            self.open_bridge_dialog(ctx, kind);
+        }
+        // While a dialog is open the views behind it do not react.
+        if switch && !dialog_open {
             self.switch_view(ctx);
         }
         self.show_dialog(ctx);
+        self.show_bridge_dialog(ctx);
         self.track_window(ctx);
         ctx.request_repaint_after(REPAINT_EVERY);
     }

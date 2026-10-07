@@ -30,6 +30,10 @@ pub struct Action {
     pub switch_view: bool,
     /// The button "Settings" was used.
     pub open_settings: bool,
+    /// The button "Set up bridge" was used.
+    pub setup_bridge: bool,
+    /// The button "Remove bridge" was used.
+    pub remove_bridge: bool,
 }
 
 /// Version and commit as shown in the footer, for example `0.1.0 (a1b2c3d)`.
@@ -249,6 +253,12 @@ fn footer(ui: &mut Ui, action: &mut Action) {
     ui.horizontal(|ui| {
         if ui.button("Settings").clicked() {
             action.open_settings = true;
+        }
+        if ui.button("Set up bridge").clicked() {
+            action.setup_bridge = true;
+        }
+        if ui.button("Remove bridge").clicked() {
+            action.remove_bridge = true;
         }
         if ui.button("Compact view (D)").clicked() {
             action.switch_view = true;
