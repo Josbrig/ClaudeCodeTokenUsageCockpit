@@ -1,0 +1,4 @@
+{"kind":"other","data":{"tokens":5}}
+[1,2,3]
+"just a string"
+{"type":"assistant","message":{"usage":"not an object"}}
