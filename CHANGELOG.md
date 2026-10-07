@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Changed
-- On Windows the bridge can be set up from a folder whose path contains a space (short folder name or quoted path); Linux and macOS still need a folder without spaces.
+- The bridge can be set up from a folder whose path contains a space: on Windows with the short folder name or a quoted path, on Linux and macOS (not tried yet) quoted for `sh -c`.
 - The Windows x64 executable no longer imports the Visual C++ runtime (the C runtime is linked in; not yet tried on a clean Windows); the bridge starts faster (median 66 ms instead of 101 ms on the development machine).
 
 ### Added

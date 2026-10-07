@@ -217,3 +217,128 @@ fn req_117_the_bridge_runs_from_a_folder_with_a_space() {
             .is_none()
     );
 }
+
+// The quoting of the command for `sh -c` (Linux and macOS) is checked against a real POSIX shell:
+// Git for Windows bash reads single quotes the way `sh` does. The module is the same file that the
+// program uses.
+#[allow(dead_code)]
+#[path = "../src/quoting.rs"]
+mod quoting;
+
+#[cfg(windows)]
+#[test]
+fn req_117_a_sh_quoted_command_runs_from_a_folder_with_a_space_a_quote_and_a_dollar_sign() {
+    let Some(bash) = git_bash() else {
+        eprintln!("Git for Windows bash not found: this test is skipped");
+        return;
+    };
+    let home = tempfile::tempdir().unwrap();
+    let folder = home.path().join("it's my $tools");
+    fs::create_dir_all(&folder).unwrap();
+    let exe = folder.join("usage-cockpit.exe");
+    fs::copy(assert_cmd::cargo::cargo_bin!("usage-cockpit"), &exe).unwrap();
+    let path = exe.to_string_lossy().replace('\\', "/");
+    let command = format!("{} bridge", quoting::sh_quote(&path));
+    assert!(command.starts_with('\''), "{command}");
+    assert_eq!(
+        run_in_bash(&bash, &command, home.path()).trim(),
+        "5h 23.5% \u{b7} 7d 41.2%",
+        "command: {command}"
+    );
+}
+
+/// Runs `setup-bridge --yes` from a copy of the program in a folder with a space, an apostrophe and
+/// a dollar sign, then returns the command it wrote into the settings.
+fn command_written_from_a_difficult_folder(home: &Path) -> (std::path::PathBuf, String) {
+    let folder = home.join("it's my $tools");
+    fs::create_dir_all(&folder).unwrap();
+    let exe = folder.join(if cfg!(windows) {
+        "usage-cockpit.exe"
+    } else {
+        "usage-cockpit"
+    });
+    fs::copy(assert_cmd::cargo::cargo_bin!("usage-cockpit"), &exe).unwrap();
+    Command::new(&exe)
+        .args(["setup-bridge", "--yes"])
+        .env("USAGE_COCKPIT_HOME", home)
+        .env("CLAUDE_CONFIG_DIR", home.join("claude"))
+        .assert()
+        .success();
+    let settings = read_json(&settings_path(home));
+    let command = settings["statusLine"]["command"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    (exe, command)
+}
+
+#[cfg(windows)]
+#[test]
+fn req_117_the_command_that_setup_writes_runs_from_a_folder_with_a_quote_and_a_dollar_sign() {
+    let Some(bash) = git_bash() else {
+        eprintln!("Git for Windows bash not found: this test is skipped");
+        return;
+    };
+    let home = tempfile::tempdir().unwrap();
+    let (exe, command) = command_written_from_a_difficult_folder(home.path());
+    assert_eq!(
+        run_in_bash(&bash, &command, home.path()).trim(),
+        "5h 23.5% \u{b7} 7d 41.2%",
+        "command: {command}"
+    );
+    // setting up again from the same place is recognised, and the removal finds the command
+    Command::new(&exe)
+        .args(["setup-bridge", "--yes"])
+        .env("USAGE_COCKPIT_HOME", home.path())
+        .env("CLAUDE_CONFIG_DIR", home.path().join("claude"))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("already set up"));
+    Command::new(&exe)
+        .args(["remove-bridge", "--yes"])
+        .env("USAGE_COCKPIT_HOME", home.path())
+        .env("CLAUDE_CONFIG_DIR", home.path().join("claude"))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("removed"));
+    assert!(
+        read_json(&settings_path(home.path()))
+            .get("statusLine")
+            .is_none()
+    );
+}
+
+/// The same on Linux and macOS with the system shell. NOT RUN on the development machine (Windows);
+/// it is the check that the human issues for those systems ask for.
+#[cfg(unix)]
+#[test]
+fn req_117_the_command_that_setup_writes_runs_from_a_folder_with_a_quote_and_a_dollar_sign() {
+    let home = tempfile::tempdir().unwrap();
+    let (exe, command) = command_written_from_a_difficult_folder(home.path());
+    let record = format!(
+        "{{\"session_id\":\"t\",\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":23.5,\"resets_at\":{}}},\"seven_day\":{{\"used_percentage\":41.2,\"resets_at\":{}}}}}}}",
+        4_102_444_800_u64, 4_102_444_800_u64
+    );
+    let output = Command::new("sh")
+        .args(["-c", &command])
+        .env("USAGE_COCKPIT_HOME", home.path())
+        .write_stdin(record)
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "5h 23.5% \u{b7} 7d 41.2%",
+        "command: {command}"
+    );
+    Command::new(&exe)
+        .args(["remove-bridge", "--yes"])
+        .env("USAGE_COCKPIT_HOME", home.path())
+        .env("CLAUDE_CONFIG_DIR", home.path().join("claude"))
+        .assert()
+        .success();
+    assert!(
+        read_json(&settings_path(home.path()))
+            .get("statusLine")
+            .is_none()
+    );
+}

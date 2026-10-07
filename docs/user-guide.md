@@ -53,7 +53,7 @@ Put the file in any folder you like, for example `C:\Tools\usage-cockpit\` on Wi
 The *bridge* is explained in [section 4](#4-connecting-it-to-claude-code); here it matters only that the command Claude Code runs contains the path of the program.
 
 - **Windows:** a space in the path is handled (the setup writes the old-style short name of the folder, such as `MYTOOL~1`, which has no space, or quotes the path).
-- **Linux and macOS:** the setup still refuses a path with a space and tells you so; use a folder without spaces there.
+- **Linux and macOS** (not tried yet): a path with a space or another special character is quoted for the shell (`sh`) that Claude Code uses.
 
 If you move the program later, set the bridge up again from its new place (*Set up bridge* replaces the old entry), and, if you use *Start with Windows* ([section 4.3](#43-start-with-windows)), press *Use this file* in the settings.
 
@@ -285,9 +285,8 @@ The program also *reads* the transcript files of Claude Code (`projects/**/*.jso
 - **The window says *Claude Code sent no usage limits*.** Claude Code delivers limits only for Pro and Max subscriptions and only after the first response of a session.
 - **Values are grey and say *stale*.** The newest record is older than the threshold, or a record that could not be read arrived. Use Claude Code once; check the log (`log.txt` in the data folder).
 - **A window says *Window reset* instead of values.** The reset time has passed and no newer record has arrived yet; use Claude Code.
-- **The bridge does not seem to run.** Open the detailed view and press **Set up bridge**: it says if the bridge is already set up. Check that no project of yours has its own `statusLine`, and, on Linux and macOS, that the program path has no spaces. If you moved the program, set the bridge up again.
+- **The bridge does not seem to run.** Open the detailed view and press **Set up bridge**: it says if the bridge is already set up. Check that no project of yours has its own `statusLine`, and that the program path is the one in the Claude Code settings. If you moved the program, set the bridge up again.
 - **Claude Code shows my old status line only.** That is what the *kept* status line is for: the bridge runs it and shows its output. The cockpit still receives the data. If the old command fails or takes longer than a second, the bridge shows its own text.
-- **The setup says the path contains a space (Linux, macOS).** Move the program to a folder without spaces and set the bridge up again.
 - **The window is gone or outside the screen.** Close the cockpit, open `settings.toml` in the configuration folder, and delete the `[window]` section (or set `x` and `y` to small positive numbers), then start it again. The window then opens at its default place and at the default size of the compact view; press `D` for the detailed view.
 - **The box *Start with Windows* says the entry starts another file.** You moved the program. Press *Use this file*.
 - **I ticked *Start with Windows*, but the program does not start.** Look at the box: if it says the entry is switched off in the Windows list of startup apps, tick it again (or switch it on in *Task Manager*, *Startup apps*).
@@ -302,7 +301,7 @@ The program also *reads* the transcript files of Claude Code (`projects/**/*.jso
 - **Other computers are not visible in the token statistics.** The cockpit shows what Claude Code on this computer hands over, and its transcript statistics cover this computer only.
 - **No support for API-key billing.** With an API key there are no such usage windows.
 - **A project-level `statusLine` overrides the bridge.** If a project has its own `statusLine` in its `.claude/settings.json`, Claude Code uses that one in that project and the bridge does not run there.
-- **On Linux and macOS the program must be in a folder without spaces** (Windows has no such limit), and on Windows the command-line commands need `--yes`.
+- **On Windows the command-line commands need `--yes`.**
 - **Wayland (Linux).** Under a Wayland desktop without X11 support, "always on top" and the saved position may not work; under X11 and XWayland they are planned to work (not tried yet).
 - The saved window position is not checked against your monitors: if you unplug a monitor, the window may open outside the visible area (see *Troubleshooting*).
 - The percentages come from Claude Code as they are; the token counts of the transcript statistics are an estimate and not an invoice.

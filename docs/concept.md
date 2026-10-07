@@ -164,7 +164,7 @@ The replaced status line is kept in `<config dir>/bridge-state.json` (`{"v":1, "
 
 `setup-bridge`:
 
-1. Determine the absolute path of the running executable. Convert to forward slashes on Windows. If the path contains a space: on Windows use the 8.3 short name of the folder (no space, accepted by every shell), or, if the volume has none, put the whole path in double quotes (Git Bash and cmd accept that; PowerShell does not); elsewhere stop with a message asking the user to place the executable in a folder without spaces until the quoting for `sh -c` is done.
+1. Determine the absolute path of the running executable. Convert to forward slashes on Windows. If the path contains a space: on Windows use the 8.3 short name of the folder (no space, accepted by every shell), or, if the volume has none, put the whole path in double quotes (Git Bash and cmd accept that; PowerShell does not); on Linux and macOS the path is quoted for `sh -c` (single quotes, a single quote inside written as `'\''`) whenever it has a character that `sh` reads differently, and stays as it is otherwise. Removal and the check "already set up" read the command back the way a shell reads it (`quoting.rs`).
 2. Show what will change and ask `Change Claude Code settings? [y/N]` (skipped with `--yes`; the GUI shows the same text in a dialog). Declining leaves the file byte-identical, exit 1.
 3. If the settings file exists, copy it to `settings.json.usage-cockpit-backup-<YYYYMMDD-HHMMSS>`.
 4. If a `statusLine` object exists and is not already the bridge, store it in `bridge-state.json`.

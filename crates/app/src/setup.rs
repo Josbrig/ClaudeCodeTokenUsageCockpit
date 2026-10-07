@@ -9,6 +9,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::quoting;
+
 use cockpit_core::store::write_atomic;
 use serde_json::{Map, Value, json};
 
@@ -45,13 +47,11 @@ pub enum RemoveOutcome {
 /// happens before the first write.
 #[derive(Debug, thiserror::Error)]
 pub enum SetupError {
-    /// A space in the path would need quoting, which is only done on Windows so far.
+    /// The path of the program is not valid text and cannot be written into the settings.
     #[error(
-        "the path of the executable contains a space ({0}); place usage-cockpit in a folder \
-         without spaces and run the command again"
+        "the path of the program is not valid text ({0}); move it to a folder with an ordinary name and run the command again"
     )]
-    #[cfg_attr(windows, allow(dead_code))]
-    PathWithSpace(PathBuf),
+    PathNotText(PathBuf),
     /// The settings file does not hold a JSON object.
     #[error("{0} is not a JSON object; fix or remove it by hand")]
     NotAnObject(PathBuf),
@@ -167,37 +167,58 @@ pub fn remove(
 ///
 /// A path with a space is not accepted by every shell Claude Code may use. On Windows the 8.3
 /// short name is used then (it has no space and works in every shell); if the volume has none,
-/// the path is put in double quotes, which Git Bash and cmd accept. Elsewhere such a path is
-/// refused until the quoting for `sh -c` is done.
+/// the path is put in double quotes, which Git Bash and cmd accept. On Linux and macOS the path
+/// is quoted for `sh -c` whenever it has a character that `sh` would read differently (a space,
+/// a quote, a dollar sign and so on); a plain path stays as it is.
+///
+/// A path that is not valid text is refused: it cannot be written into the settings as it is.
 fn bridge_command(exe: &Path) -> Result<String, SetupError> {
-    let path = exe.to_string_lossy().replace('\\', "/");
-    if !path.contains(' ') {
-        return Ok(format!("{path} bridge"));
-    }
+    let Some(text) = exe.to_str() else {
+        return Err(SetupError::PathNotText(exe.to_path_buf()));
+    };
     #[cfg(windows)]
     {
+        let path = text.replace('\\', "/");
         // Only the folder is shortened: the file name must stay `usage-cockpit[.exe]` so that
         // `is_bridge` still recognises the command.
-        let short = exe
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .filter(|name| !name.contains(' '))
-            .zip(exe.parent().and_then(short_path))
-            .map(|(name, folder)| format!("{}/{name}", folder.replace('\\', "/")))
-            .filter(|short| !short.contains(' '));
+        let short = path
+            .contains(' ')
+            .then(|| {
+                exe.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .filter(|name| !name.contains(' '))
+                    .zip(exe.parent().and_then(short_path))
+                    .map(|(name, folder)| format!("{}/{name}", folder.replace('\\', "/")))
+                    .filter(|short| !short.contains(' '))
+            })
+            .flatten();
         Ok(windows_command(&path, short))
     }
     #[cfg(not(windows))]
     {
-        Err(SetupError::PathWithSpace(exe.to_path_buf()))
+        Ok(unix_command(text))
     }
 }
 
-/// The command for a path with a space: the short form if there is one, else the quoted path.
+/// The command for `sh -c`: the path quoted if it needs it, then `bridge`.
+#[cfg_attr(windows, allow(dead_code))]
+fn unix_command(path: &str) -> String {
+    format!("{} bridge", quoting::sh_quote(path))
+}
+
+/// The command on Windows. A path without a space, or the short folder name if there is one, is
+/// used as it is when Git Bash reads it as one word, and in single quotes when it has an
+/// apostrophe, a dollar sign or another character that bash would read differently. A path with a
+/// space and no short name is put in double quotes (cmd accepts that too), or in single quotes if
+/// it has such a character as well.
 #[cfg(windows)]
 fn windows_command(path: &str, short: Option<String>) -> String {
-    match short {
-        Some(short) => format!("{short} bridge"),
+    let plain = short.or_else(|| (!path.contains(' ')).then(|| path.to_owned()));
+    match plain {
+        Some(plain) => format!("{} bridge", quoting::sh_quote(&plain)),
+        None if path.chars().any(|c| "'$`!&()<>;|*?#\"{}[]^\\".contains(c)) => {
+            format!("{} bridge", quoting::sh_quote(path))
+        }
         None => format!("\"{path}\" bridge"),
     }
 }
@@ -235,22 +256,11 @@ fn is_bridge(status_line: &Value) -> bool {
     let Some(command) = current_command(Some(status_line)) else {
         return false;
     };
-    // `"<path with spaces>" bridge` or `<path> bridge`
-    let command = command.trim_start();
-    let (program, rest) = match command.strip_prefix('"') {
-        Some(quoted) => match quoted.split_once('"') {
-            Some((program, rest)) => (program, rest),
-            None => return false,
-        },
-        None => match command.split_once(char::is_whitespace) {
-            Some((program, rest)) => (program, rest),
-            None => return false,
-        },
-    };
-    // after the closing quote a space must follow, else a shell sees one word
-    if command.starts_with('"') && !rest.starts_with(char::is_whitespace) {
+    // `<path> bridge`, the path possibly in single or double quotes: read it as a shell would
+    let Some((program, rest)) = quoting::first_word(command) else {
         return false;
-    }
+    };
+    let program = program.as_str();
     let mut parts = rest.split_whitespace();
     let (Some("bridge"), None) = (parts.next(), parts.next()) else {
         return false;
@@ -678,6 +688,32 @@ mod tests {
         assert_eq!(short, "C:/MYTOOL~1/usage-cockpit.exe bridge");
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn req_117_special_characters_in_a_windows_path_are_single_quoted() {
+        let line = |command: &str| json!({"type": "command", "command": command});
+        // an apostrophe without a space: plain would not be one word for bash
+        let command = windows_command("C:/Users/O'Brien/usage-cockpit.exe", None);
+        assert_eq!(command, "'C:/Users/O'\\''Brien/usage-cockpit.exe' bridge");
+        assert!(is_bridge(&line(&command)));
+        // a space and a dollar sign, no short name: single quotes, not double
+        let command = windows_command("C:/My $Tools/usage-cockpit.exe", None);
+        assert_eq!(command, "'C:/My $Tools/usage-cockpit.exe' bridge");
+        assert!(is_bridge(&line(&command)));
+        // a short name with an apostrophe is quoted too
+        let command = windows_command(
+            "C:/it's my/usage-cockpit.exe",
+            Some("C:/IT'SMY~1/usage-cockpit.exe".into()),
+        );
+        assert_eq!(command, "'C:/IT'\\''SMY~1/usage-cockpit.exe' bridge");
+        assert!(is_bridge(&line(&command)));
+        // a plain path is not touched
+        assert_eq!(
+            windows_command("C:/Tools/usage-cockpit.exe", None),
+            "C:/Tools/usage-cockpit.exe bridge"
+        );
+    }
+
     #[test]
     fn req_117_quoted_command_is_recognised_as_the_bridge() {
         let line = |command: &str| json!({"type": "command", "command": command});
@@ -693,22 +729,38 @@ mod tests {
         assert!(is_bridge(&line("  /opt/tools/usage-cockpit bridge")));
     }
 
-    #[cfg(not(windows))]
     #[test]
-    fn req_023_path_with_space_refused() {
-        let d = dirs();
-        put_settings(&d, r#"{"a":1}"#);
-        let exe = d
-            .exe
-            .parent()
-            .unwrap()
-            .join("with space")
-            .join("usage-cockpit");
-        let error = setup(&d.settings, &exe, &d.state, &mut yes).unwrap_err();
-        assert!(matches!(error, SetupError::PathWithSpace(_)), "{error}");
-        assert!(error.to_string().contains("without spaces"));
-        assert_eq!(fs::read_to_string(&d.settings).unwrap(), r#"{"a":1}"#);
-        assert!(!d.state.exists());
+    fn req_117_unix_command_quotes_what_sh_would_read_differently() {
+        let line = |command: &str| json!({"type": "command", "command": command});
+        assert_eq!(
+            unix_command("/opt/tools/usage-cockpit"),
+            "/opt/tools/usage-cockpit bridge"
+        );
+        for path in [
+            "/opt/my tools/usage-cockpit",
+            "/opt/it's/$HOME/usage-cockpit",
+            "/Volumes/My Disk/Tools (x)/usage-cockpit",
+        ] {
+            let command = unix_command(path);
+            assert!(command.starts_with('\''), "{command}");
+            assert!(command.ends_with(" bridge"), "{command}");
+            assert!(
+                is_bridge(&line(&command)),
+                "the removal must find {command}"
+            );
+        }
+        // a program with another name in quotes is not the bridge
+        assert!(!is_bridge(&line(&unix_command("/opt/my tools/other"))));
+    }
+
+    #[test]
+    fn req_117_single_quoted_commands_are_recognised_as_the_bridge() {
+        let line = |command: &str| json!({"type": "command", "command": command});
+        assert!(is_bridge(&line("'/opt/my tools/usage-cockpit' bridge")));
+        assert!(is_bridge(&line("'/opt/it'\\''s/usage-cockpit' bridge")));
+        assert!(!is_bridge(&line("'/opt/my tools/usage-cockpit bridge")));
+        assert!(!is_bridge(&line("'/opt/my tools/usage-cockpit' bridge x")));
+        assert!(!is_bridge(&line("'/opt/my tools/usage-cockpit'")));
     }
 
     #[test]

@@ -16,7 +16,7 @@ A tiny, always-on-top cockpit that shows your Claude **5-hour** and **weekly** u
 ## Start
 
 1. Get the program: download the file for your system from the *Releases* page once a release exists, or build it with a current stable Rust toolchain: `cargo build --release` (the program is `target/release/usage-cockpit`, with `.exe` on Windows).
-2. Put it in any folder (on Linux and macOS one **without spaces** in its path, for now) and start it. The window shows *No data yet*.
+2. Put it in any folder and start it. The window shows *No data yet*.
 3. Press **Set up bridge** in the window and confirm. After the next response in Claude Code the values appear.
 
 Details, troubleshooting and how to remove everything again: [docs/user-guide.md](docs/user-guide.md).
