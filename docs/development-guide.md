@@ -47,3 +47,32 @@ cargo test --all
 ```
 
 All three must pass before a change is handed in.
+
+## 2. Building with CMake
+
+`CMakeLists.txt` is a front end for the Rust workspace: it calls `cargo` and compiles nothing itself (the project has no language, so no C or C++ compiler is looked for). It gives the same commands on every system and produces the files of a release.
+
+```
+cmake -S . -B build
+cmake --build build --config Release --target usage-cockpit   # cargo build --release
+cmake --build build --target check                            # cargo fmt --check, cargo clippy -D warnings
+ctest --test-dir build -C Release                             # fmt, clippy and the tests of the workspace
+cmake --build build --config Release --target dist            # build/dist/usage-cockpit-<version>-<system>[.exe] and SHA256SUMS
+```
+
+| Target / command | What it does |
+|---|---|
+| `usage-cockpit` (the default) | `cargo build --release --locked` |
+| `check` | `cargo fmt --all --check`, then `cargo clippy --all-targets -D warnings` |
+| `ctest` (or the target `test`) | three tests: `cargo-fmt`, `cargo-clippy`, `cargo-test` (`cargo test --all`) |
+| `dist` | builds, copies the program to `build/dist/usage-cockpit-<version>-<system>[.exe]` and records its SHA-256 in `build/dist/SHA256SUMS` (lines of other systems built into the same folder are kept) |
+
+- **Version and system name.** The version is the one of `Cargo.toml` (`[workspace.package]`). The system name follows from the Rust target: `windows-x64` (`x86_64-pc-windows-msvc`), `linux-x64` (`x86_64-unknown-linux-gnu`), `linux-arm64` (`aarch64-unknown-linux-gnu`), `macos-arm64` (`aarch64-apple-darwin`). Another target is refused with a message.
+- **Options.** `-DCOCKPIT_TARGET=<triple>` builds for another target than the host of `rustc`; `-DCOCKPIT_CARGO=<path>` uses a particular `cargo`. Without the options the `cargo` of the cargo bin folder of rustup is used (its `cargo` honours the toolchain of `rust-toolchain.toml`; the commands are run in the repository folder), else the one on the `PATH`. Configuring runs `rustc -vV`, which can make rustup download the pinned toolchain the first time.
+- **A target that is not the host.** `-DCOCKPIT_TARGET=<triple>` needs that target installed (`rustup target add <triple>`) and a linker for it. The tests of such a target cannot run on this computer: `cargo-test` then only compiles them (`--no-run`) and says so when configuring.
+- **Where things go.** Everything cargo builds goes to `build/cargo-target`, so a CMake build never mixes with the `target/` folder of plain `cargo` runs. `build/` is ignored by git.
+- **Not inside the source tree.** CMake refuses a build folder that is the source folder (CMake has written its `CMakeCache.txt` and `CMakeFiles` there by then: delete them).
+- **Generators.** Any generator is meant to work (Visual Studio was tried; Ninja, NMake and Make were not). With a multi-configuration generator such as Visual Studio, give `--config Release` to `cmake --build` and `-C Release` to `ctest`.
+- **Windows.** Tried with the Visual Studio 17 2022 generator. `scripts\tests\cmake-build.tests.ps1` configures into a temporary folder, builds `dist`, checks the file name, the checksum, that the program in `dist` starts, that a second run keeps one line per file and the lines of other systems, and that an unsupported target is refused (`-RunTests` also runs `ctest`). The first run builds the whole program and takes a few minutes.
+- **Linux and macOS.** The same files are meant to work there (#155, #156, #157); they were **not tried** on those systems yet.
+- **Releases.** The release workflow (#57) is separate (it changes workflow files and needs the owner's go-ahead); it can use these files later.
