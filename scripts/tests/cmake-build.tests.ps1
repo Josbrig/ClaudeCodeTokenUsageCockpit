@@ -15,7 +15,7 @@
   Also try the other targets from this computer: configure with -DCOCKPIT_TARGET for Linux x64,
   Linux arm64 and macOS arm64 and run the `check` target (cargo fmt --check and cargo clippy for that
   target). Nothing is linked or run, so this proves the configuration, the naming and that the code
-  of that system compiles and passes the lints; it does not build a program for it.
+  of that system passes the lints (clippy type-checks it); it does not build a program for it.
 
 .PARAMETER Keep
   Do not delete the temporary build folder at the end.
