@@ -208,7 +208,7 @@ A line **This window's limit binds first.** appears under the state of the windo
 | Top (compact view: instead of the rows) | *Claude Code sent no usage limits. They appear only for Pro and Max subscriptions, after the first response of a session.* | Claude Code delivered data but no limits: with an API key there are none; otherwise use Claude Code once more. |
 | Top (compact view: instead of the rows) | *Cannot read the data folder:* followed by the folder | The program cannot read its data folder (rights, a broken drive). Check the folder; see [section 8](#8-where-your-data-is). |
 | In a window's row | *no data* | This window was not delivered. |
-| In a window's row | *Window reset. Waiting for new data from Claude Code.* | The reset time of the newest data has passed and nothing newer has arrived; use Claude Code. |
+| In a window's row | *Window has reset. Nothing reported since; it fills again with the next report from Claude Code.* | The reset time of the newest data has passed and nothing newer has arrived, so the old value would be wrong and is not shown. Nothing needs fixing: the row fills again with the next report from Claude Code (after your next message there). |
 | Bottom line | `updated 12 s ago` | How old the newest data is. |
 | Bottom line, rows grey | `stale, 14 min old` | The newest data is older than the *stale after* setting (10 minutes by default), or a record that could not be read arrived after the newest good one. The values stay, marked with ⏸ and grey; in the compact view they also get a dashed outline. |
 | Next to a number | *not available* or `–` | It cannot be computed from the data there is (for example a rate needs two records). |

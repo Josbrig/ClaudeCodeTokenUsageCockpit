@@ -364,7 +364,7 @@ Instead of zero values the window shows one of these texts (decided in the view 
 | No `latest.json` yet | `No data yet. Set up the bridge and use Claude Code once.` plus the "Set up bridge" button |
 | Latest record has neither window | `Claude Code sent no usage limits. They appear only for Pro and Max subscriptions, after the first response of a session.` |
 | One window missing | that row shows `no data` |
-| Reset time passed, no newer record | `Window reset. Waiting for new data from Claude Code.` |
+| Reset time passed, no newer record | `Window has reset. Nothing reported since; it fills again with the next report from Claude Code.` |
 | Data directory unreadable | `Cannot read the data folder: <path>` |
 
 ## 12. Licences (REQ-107)

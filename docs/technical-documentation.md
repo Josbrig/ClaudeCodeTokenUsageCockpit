@@ -154,7 +154,7 @@ The record is stored **before** the kept command runs, so a slow or failing kept
 
 All in `cockpit-core::metrics`, `periods` and `planning`; the view model only calls them. Notation for one window: `u` used percent (clamped to 0 to 100), `R` reset time, `L` length of the window (5 h = 18,000 s; 7 d = 604,800 s), `now`, `tol` the tolerance band, `P` the rate period.
 
-**Periods.** Records of one window kind are grouped in received order. A record continues the current period if its reset time differs from the period's last reset time by at most 600 s **and** it was received before that reset time; otherwise it starts a new period. The *current* period is the latest one whose reset time is in the future; it is the base of the usage rate and the chart. A window shows *Window reset. Waiting for new data from Claude Code.* when the reset time of the **newest record** (by receive time) has passed.
+**Periods.** Records of one window kind are grouped in received order. A record continues the current period if its reset time differs from the period's last reset time by at most 600 s **and** it was received before that reset time; otherwise it starts a new period. The *current* period is the latest one whose reset time is in the future; it is the base of the usage rate and the chart. A window shows *Window has reset. Nothing reported since; it fills again with the next report from Claude Code.* when the reset time of the **newest record** (by receive time) has passed.
 
 **Basic values.**
 - remaining = 100 − u; time to reset = max(0, R − now);
