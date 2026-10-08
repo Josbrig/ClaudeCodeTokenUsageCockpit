@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Windows x64 executable no longer imports the Visual C++ runtime (the C runtime is linked in; not yet tried on a clean Windows); the bridge starts faster (median 66 ms instead of 101 ms on the development machine).
 
 ### Added
+- `scripts/tests/cmake-build.tests.ps1 -OtherTargets`: configures the CMake build for Linux x64, Linux arm64 and macOS arm64 from Windows and runs the check target for each (the code and test code of those targets pass clippy; nothing is built into a program, linked or run).
 - `scripts/setup-dev-macos.sh`: checks and, on request, installs the tools needed to develop the program on a Mac with Apple Silicon (Command Line Tools, Rust, CMake and Ninja through Homebrew); Homebrew itself is never installed by it.
 - `scripts/setup-dev-linux.sh`: checks and, on request, installs the tools needed to develop the program on Linux (Rust, C compiler, Git, CMake, Ninja and the run-time libraries of the window; apt-based systems), with tests that use stand-in programs and are cut off from the computer they run on.
 - Linux and macOS: *Remove everything* waits for the closing window with `kill -0`, and cleans the one folder of data and configuration on macOS once (compiled and linted, not tried on those systems).
