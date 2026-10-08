@@ -64,6 +64,33 @@ Assert-Equal ((Get-WingetArguments -Id 'Git.Git') -join ' ') 'install --id Git.G
 $withOverride = Get-WingetArguments -Id 'X.Y' -Override '--passive'
 Assert-Equal ($withOverride[-2..-1] -join ' ') '--override --passive' 'winget arguments with an override'
 
+# ---- the stored PATH
+$env:COCKPIT_TEST_DIR = 'C:\Tools\X'
+try {
+    $dirs = Get-StoredPathDirs @('C:\A;"C:\B B";;%COCKPIT_TEST_DIR%\bin', 'C:\A;C:\C', $null)
+    Assert-Equal ($dirs -join '|') 'C:\A|C:\B B|C:\Tools\X\bin|C:\C' 'the stored PATH is split, expanded and without duplicates'
+} finally {
+    Remove-Item Env:COCKPIT_TEST_DIR -ErrorAction SilentlyContinue
+}
+Assert-Equal @(Get-StoredPathDirs @()).Count 0 'no stored PATH gives no folders'
+
+# a program that is only on the stored PATH is found (a folder with a fake program)
+$fakeDir = Join-Path ([IO.Path]::GetTempPath()) ('cockpit-fake-tool-' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory $fakeDir)
+try {
+    Set-Content -LiteralPath (Join-Path $fakeDir 'cockpit-fake-tool.exe') -Value 'x'
+    Assert-Equal ([string](Find-Program 'cockpit-fake-tool')) '' 'a program outside every PATH is not found'
+    $before = [Environment]::GetEnvironmentVariable('Path', 'Process')
+    # the folder is not on the PATH of this terminal; Find-Program must look at the stored PATH,
+    # which the function reads through this seam
+    function Get-StoredPathDirs { param([string[]]$Stored) return @($fakeDir) }
+    Assert-Equal ((Find-Program 'cockpit-fake-tool') -like '*cockpit-fake-tool.exe') $true 'a program on the stored PATH is found'
+    Assert-Equal ([Environment]::GetEnvironmentVariable('Path', 'Process')) $before 'the PATH of this terminal is not changed'
+} finally {
+    Remove-Item -LiteralPath $fakeDir -Recurse -Force -ErrorAction SilentlyContinue
+    . (Join-Path (Split-Path -Parent $PSScriptRoot) 'setup-dev-windows.ps1')
+}
+
 # ---- the winget scope
 Assert-Equal ((Get-WingetArguments -Id 'X.Y' -UserScope) -join ' ') 'install --id X.Y --exact --accept-source-agreements --accept-package-agreements --scope user' 'winget arguments for the current user'
 

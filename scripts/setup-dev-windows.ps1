@@ -77,6 +77,21 @@ function Format-States {
     return ($lines -join [Environment]::NewLine)
 }
 
+# The folders of a stored PATH text (as Windows keeps it for the user or the computer): split at
+# `;`, environment variables such as %USERPROFILE% expanded, empty parts and duplicates dropped.
+function Get-StoredPathDirs {
+    param([string[]]$Stored)
+    $dirs = New-Object System.Collections.Generic.List[string]
+    foreach ($text in $Stored) {
+        if (-not $text) { continue }
+        foreach ($part in ($text -split ';')) {
+            $expanded = [Environment]::ExpandEnvironmentVariables($part.Trim().Trim('"'))
+            if ($expanded -and -not $dirs.Contains($expanded)) { $dirs.Add($expanded) }
+        }
+    }
+    return $dirs.ToArray()
+}
+
 # The winget command line (as an argument list) that installs a tool.
 function Get-WingetArguments {
     param([string]$Id, [string]$Override, [switch]$UserScope)
@@ -101,10 +116,18 @@ function Find-Program {
     param([string]$Name)
     $command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command) { return $command.Source }
-    foreach ($dir in @((Get-CargoBin))) {
-        foreach ($candidate in @("$Name.exe", $Name)) {
+    # The PATH of this terminal is older than the one Windows has stored if a tool was installed
+    # after the terminal was opened (also by this script): look at the stored one as well.
+    # (the computer's PATH comes first in Windows, then the user's)
+    $stored = Get-StoredPathDirs @(
+        [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+        [Environment]::GetEnvironmentVariable('Path', 'User')
+    )
+    # Only programs are taken from the stored folders (not a file without an extension).
+    foreach ($dir in (@((Get-CargoBin)) + $stored)) {
+        foreach ($candidate in @("$Name.exe", "$Name.cmd", "$Name.bat")) {
             $path = Join-Path $dir $candidate
-            if (Test-Path -LiteralPath $path) { return $path }
+            if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
         }
     }
     return $null
@@ -292,12 +315,13 @@ function Invoke-Setup {
     if (-not $SkipBuild -and -not $CheckOnly) {
         $cargoBin = Get-CargoBin
         if (Test-Path -LiteralPath $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
-        if (Find-Program 'cargo') {
+        $cargo = Find-Program 'cargo'
+        if ($cargo) {
             Write-Host ''
             Write-Host 'Building once to prove that the setup works (cargo build) ...'
             Push-Location $RepoRoot
             try {
-                & cargo build | Out-Host
+                & $cargo build | Out-Host
                 if ($LASTEXITCODE -ne 0) { throw "cargo build failed (exit code $LASTEXITCODE)." }
             } finally { Pop-Location }
             Write-Host 'The build works.'
