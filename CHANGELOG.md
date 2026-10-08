@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Windows x64 executable no longer imports the Visual C++ runtime (the C runtime is linked in; not yet tried on a clean Windows); the bridge starts faster (median 66 ms instead of 101 ms on the development machine).
 
 ### Added
+- The Windows setup script also looks at the `PATH` that Windows has stored, so it finds a tool it installed earlier in the same terminal.
 - `CMakeLists.txt`: a CMake front end for the Rust workspace (targets `usage-cockpit`, `check`, `dist`, tests with `ctest`); `dist` writes `usage-cockpit-<version>-<system>` and `SHA256SUMS`. Tried on Windows.
 - `scripts/setup-dev-windows.ps1`: checks and, on request, installs the tools needed to develop the program on Windows (Rust, C++ Build Tools, Git, CMake, Ninja); first part of `docs/development-guide.md`.
 - User guide reworked into a complete manual (quick start, installing the portable program, setup and removal, operation, reading every value and message, glossary, troubleshooting); tests check that every message and label of the window is explained.

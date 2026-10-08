@@ -30,7 +30,7 @@ powershell -File scripts\setup-dev-windows.ps1              # report, ask, insta
 - It uses `winget` for the programs (Git: `Git.Git`; CMake: `Kitware.CMake`; Ninja: `Ninja-build.Ninja`; the C++ Build Tools: `Microsoft.VisualStudio.2022.BuildTools` with the workload *Desktop development with C++*; rustup: `Rustlang.Rustup`) and `rustup` for the toolchain. If `winget` is missing it says which program to install by hand.
 - It can be run again at any time; what is present is not touched.
 - At the end it runs `cargo build` once to prove that the setup works (`-SkipBuild` leaves that out) and prints the commands to build and test.
-- After an installation, open a **new terminal** so that the new tools are on the `PATH`.
+- After an installation, open a **new terminal** so that the new tools are on the `PATH` of your programs. The script itself also looks at the `PATH` that Windows has stored, so running it again in the same terminal does not install a tool twice.
 
 The pure parts of the script (reading the toolchain channel, the plan, the table, the `winget` arguments) and its flow (exit codes, consent, which tools would be installed, with the installers replaced by fakes) have a test script that installs nothing: `powershell -File scripts\tests\setup-dev-windows.tests.ps1`.
 
