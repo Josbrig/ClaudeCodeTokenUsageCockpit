@@ -271,6 +271,7 @@ cargo test --all
 - **A `statusLine` in a project's own Claude Code settings** overrides the bridge in that project.
 - **The window position is not checked against the monitors**: after unplugging a monitor the window may open outside the visible area.
 - **Quoting in PowerShell.** The quoted bridge command (used only when a volume has no 8.3 names) does not run if Claude Code uses PowerShell as the shell for the status line.
+- **Compiled and linted, not run:** the code for Linux x64, Linux arm64 and macOS arm64 (including its tests) compiles and passes `clippy -D warnings`, checked from Windows with `cargo clippy --target <triple> --all-targets` (see the development guide, section 6); nothing of it was run.
 - **Not tried:** Linux and macOS (build, window, setup, autostart, uninstall), a Windows without development tools, the light theme, scaling other than 100 %, several monitors.
 - **Licence notices:** the footer links to `THIRD_PARTY_LICENSES.md`, which does not exist yet (part of the legal files before a release).
 - **A model `<synthetic>`** with zero tokens appears in the per-model table; it comes from the transcripts and is harmless.

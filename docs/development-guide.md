@@ -61,7 +61,7 @@ The pure parts of the script (reading the toolchain channel, the plan, the table
 
 ### 1.3 Linux and macOS
 
-The scripts `scripts/setup-dev-linux.sh` and `scripts/setup-dev-macos.sh` are planned (#152, #153) and do not exist yet. Until then, by hand:
+The scripts `scripts/setup-dev-linux.sh` and `scripts/setup-dev-macos.sh` are planned (#152, #153) and do not exist yet. Until then, by hand (you can already compile and lint for these systems from Windows, see [section 6](#6-checks-and-handing-a-change-in)):
 
 - **Linux** (Debian, Ubuntu, Raspberry Pi OS; not tried): `sudo apt install build-essential pkg-config cmake ninja-build git libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev libgl1-mesa-dev`, then rustup as above.
 - **macOS** (not tried): `xcode-select --install`, then rustup as above, and `brew install cmake ninja`.
@@ -205,6 +205,19 @@ cargo test --all
 ```
 
 (or `ctest --test-dir build -C Release` after a CMake configure). Fix the cause of a failure; do not weaken a check or an allowed lint to make it pass.
+
+**Checking the other systems without having them.** Code that is only compiled on Linux or macOS (`#[cfg(unix)]`, `#[cfg(not(windows))]`: the quoting for `sh`, the shell for the kept status line, the stub that says the start entry is not available yet) is not compiled by the three commands above on Windows. From any computer you can compile and lint it for the other targets:
+
+```
+rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin
+cargo clippy --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
+cargo clippy --target aarch64-unknown-linux-gnu --all-targets -- -D warnings
+cargo clippy --target aarch64-apple-darwin --all-targets -- -D warnings
+```
+
+This proves that the code **that is compiled for that system, including its tests,** compiles and passes the lints. At the moment all three targets compile the same non-Windows code (there is no code that is specific to Linux or to macOS yet), so a difference between Linux and macOS that is added later is only checked for the targets that select it. It proves nothing else: nothing is linked or run, so the behaviour on that system is not tried (the tests for it have to be run there). It was run on Windows for these three targets and passed without a message. Do it before you hand in a change that touches code behind a `cfg`.
+
+**Handing in:**
 
 - **Commit message:** `<type>: <what>` in English, with the footer `Refs #<issue>`; types as in Conventional Commits (`feat`, `fix`, `docs`, `test`, `refactor`, `build`, `chore`).
 - **Pull request:** use the template (what and why, the requirements, the evidence as real commands with real output, a self-review from the reviewer's point of view, an independent review, follow-ups). Write `Refs #<issue>`, not `Closes`. State what you did **not** try.
