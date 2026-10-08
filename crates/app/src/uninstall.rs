@@ -239,7 +239,15 @@ pub fn finish_data(loc: &Locations, wait: impl FnOnce() -> bool) -> Vec<String> 
 fn delete_data(loc: &Locations, attempts: u32) -> (Vec<String>, bool) {
     let mut lines = Vec::new();
     let mut failed = false;
-    for (dir, names) in [(&loc.data_dir, DATA_FILES), (&loc.config_dir, CONFIG_FILES)] {
+    // On macOS the data and the configuration live in the same folder: it is cleaned once, with
+    // the names of both (cleaning it twice would report the files of the second part as foreign).
+    let both: Vec<&str> = DATA_FILES.iter().chain(CONFIG_FILES).copied().collect();
+    let folders: Vec<(&PathBuf, &[&str])> = if loc.data_dir == loc.config_dir {
+        vec![(&loc.data_dir, both.as_slice())]
+    } else {
+        vec![(&loc.data_dir, DATA_FILES), (&loc.config_dir, CONFIG_FILES)]
+    };
+    for (dir, names) in folders {
         match clean_dir(dir, names, attempts) {
             Ok(None) => lines.push(format!("Deleted {}.", dir.display())),
             Ok(Some(left)) => lines.push(format!(
@@ -355,11 +363,45 @@ pub fn wait_for_exit(pid: u32) -> bool {
     }
 }
 
-/// Other systems follow in their own issues; a short pause stands in for the wait.
+/// Linux and macOS: asks `kill -0` (no signal is sent, it only tells whether the process is
+/// there) every 200 ms, for at most five minutes. A process that is a zombie (its parent has not
+/// collected it) still counts as there; that happens only if the program was started from a
+/// parent that does not wait for its children.
 #[cfg(not(windows))]
-pub fn wait_for_exit(_pid: u32) -> bool {
-    thread::sleep(Duration::from_secs(3));
-    true
+pub fn wait_for_exit(pid: u32) -> bool {
+    use std::process::{Command, Stdio};
+
+    wait_until(
+        || {
+            // `kill -0` succeeds while the process exists; a failure to run `kill` counts as gone
+            !Command::new("kill")
+                .arg("-0")
+                .arg(pid.to_string())
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success())
+        },
+        Duration::from_secs(5 * 60),
+        Duration::from_millis(200),
+    )
+}
+
+/// Calls `done` every `pause` until it says `true` or `limit` has passed; `true` if it said so.
+/// (The loop of the wait on Linux and macOS, compiled and tested everywhere.)
+#[cfg_attr(windows, allow(dead_code))]
+fn wait_until(mut done: impl FnMut() -> bool, limit: Duration, pause: Duration) -> bool {
+    let start = std::time::Instant::now();
+    loop {
+        if done() {
+            return true;
+        }
+        if start.elapsed() >= limit {
+            return false;
+        }
+        thread::sleep(pause);
+    }
 }
 
 /// Starts this program again, hidden and detached, to run [`finish_data`] after the current
@@ -380,6 +422,13 @@ pub fn start_finish_helper(exe: &Path) -> io::Result<()> {
         use std::os::windows::process::CommandExt;
         // CREATE_NO_WINDOW | DETACHED_PROCESS
         command.creation_flags(0x0800_0000 | 0x0000_0008);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // A group of its own: a Ctrl+C or the closing of the terminal that started the window does
+        // not reach the helper.
+        command.process_group(0);
     }
     command.spawn().map(|_| ())
 }
@@ -629,6 +678,62 @@ mod tests {
         let report = run(&f.loc, Data::Delete, true);
         assert!(report.text().contains("log.txt"), "{report:?}");
         assert!(f.loc.data_dir.join("log.txt").is_dir());
+    }
+
+    #[test]
+    fn req_127_the_wait_stops_when_the_condition_is_met_or_the_time_is_up() {
+        let mut calls = 0;
+        assert!(wait_until(
+            || {
+                calls += 1;
+                calls >= 3
+            },
+            Duration::from_secs(5),
+            Duration::from_millis(1)
+        ));
+        assert_eq!(calls, 3);
+        assert!(!wait_until(
+            || false,
+            Duration::from_millis(30),
+            Duration::from_millis(5)
+        ));
+        // an immediate yes does not wait at all
+        let start = std::time::Instant::now();
+        assert!(wait_until(
+            || true,
+            Duration::from_secs(5),
+            Duration::from_secs(5)
+        ));
+        assert!(start.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn req_127_data_and_configuration_in_one_folder_are_cleaned_once() {
+        let root = tempfile::tempdir().unwrap();
+        let shared = root.path().join("usage-cockpit");
+        fs::create_dir_all(&shared).unwrap();
+        for name in [
+            "latest.json",
+            "log.txt",
+            "settings.toml",
+            "bridge-state.json",
+        ] {
+            fs::write(shared.join(name), b"x").unwrap();
+        }
+        let loc = Locations {
+            claude_settings: root.path().join("claude").join("settings.json"),
+            bridge_state: shared.join("bridge-state.json"),
+            data_dir: shared.clone(),
+            config_dir: shared.clone(),
+            exe: root.path().join("usage-cockpit"),
+            autostart_name: unique_entry_name(),
+        };
+        let report = run(&loc, Data::Delete, true);
+        assert!(!report.failed, "{report:?}");
+        assert!(!shared.exists(), "{report:?}");
+        let text = report.text();
+        assert!(!text.contains("did not create"), "{text}");
+        assert_eq!(text.matches("Deleted").count(), 1, "{text}");
     }
 
     #[test]
