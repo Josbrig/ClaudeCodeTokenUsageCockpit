@@ -25,8 +25,10 @@ The first five minutes:
 0. **Get the program.** There is no download yet; until a release exists, build it yourself ([section 3.1](#31-get-the-program)).
 1. **Start the program** (double-click `usage-cockpit.exe` on Windows). A small window opens and stays on top of other windows. It says *No data yet. Set up the bridge and use Claude Code once.*
 2. **Press *Set up bridge*** in that window and confirm with *Yes*. This connects the program to Claude Code (the *bridge*, [section 4](#4-connecting-it-to-claude-code)); it changes one entry in your Claude Code settings and makes a backup of the file first.
-3. **Use Claude Code** as usual. After its next response the window fills with your numbers: how much of the **5-hour window** and of the **7-day window** (the weekly limit) you have used, and whether that is faster or slower than an *even pace* (using your quota evenly until the reset).
+3. **Use Claude Code in a terminal, not only in the VS Code extension.** Open a terminal (in VS Code: *Terminal*, *New Terminal*), type `claude`, and send one message. After its response the window fills with your numbers: how much of the **5-hour window** and of the **7-day window** (the weekly limit) you have used, and whether that is faster or slower than an *even pace* (using your quota evenly until the reset).
 4. **Press `D`** (or the small button at the lower right) to see the detailed view.
+
+**Important: the percentages come only from the terminal client of Claude Code.** The *status line* that carries the 5-hour and 7-day percentages is run by Claude Code in a terminal, and the VS Code extension does not run it (checked on this computer: 23 sessions in the extension, no data received; the documentation of Claude Code says the same). If you work only in the extension, the two rows show no percentage; they show the tokens of the last 5 hours and 7 days that the program counts in the files of Claude Code on this computer (*1,234,567 tokens in 5 h*), and the older values go grey with *stale*. The percentages are those of your account as Claude Code reports them; the program reads only what Claude Code hands over on its own computer (use on several computers together: not tried yet).
 
 When you no longer want the program: press *Remove everything* in the detailed view and confirm, then delete the program file ([section 7](#7-removing-everything-again)). By default your history stays; the backup copies of your Claude Code settings always stay.
 
@@ -293,7 +295,8 @@ The program also *reads* the transcript files of Claude Code (`projects/**/*.jso
 - **The window says *No data yet*.** Set up the bridge, then use Claude Code: data arrives after its next response. A Claude Code session that was already running may keep using the old settings; if no data arrives, start a new session.
 - **The window says *Claude Code sent no usage limits*.** Claude Code delivers limits only for Pro and Max subscriptions and only after the first response of a session.
 - **Values are grey and say *stale*.** The newest record is older than the threshold, or a record that could not be read arrived. Use Claude Code once; check the log (`log.txt` in the data folder).
-- **A window says *Window reset* instead of values.** The reset time has passed and no newer record has arrived yet; use Claude Code.
+- **A window says *Window reset* or shows only *tokens in 5 h*.** The reset time has passed, or no percentage has arrived since. Open Claude Code in a terminal (`claude`) and send a message; the extension alone sends no percentages.
+- **I work in the VS Code extension and nothing updates.** That is the limitation above: start `claude` in a terminal once. The program cannot read the percentages from the extension.
 - **The bridge does not seem to run.** Open the detailed view and press **Set up bridge**: it says if the bridge is already set up. Check that no project of yours has its own `statusLine`, and that the program path is the one in the Claude Code settings. If you moved the program, set the bridge up again.
 - **Claude Code shows my old status line only.** That is what the *kept* status line is for: the bridge runs it and shows its output. The cockpit still receives the data. If the old command fails or takes longer than a second, the bridge shows its own text.
 - **The window is gone or outside the screen.** Close the cockpit, open `settings.toml` in the configuration folder, and delete the `[window]` section (or set `x` and `y` to small positive numbers), then start it again. The window then opens at its default place and at the default size of the compact view; press `D` for the detailed view.
@@ -306,6 +309,7 @@ The program also *reads* the transcript files of Claude Code (`projects/**/*.jso
 
 ## 11. Known limitations
 
+- **No percentages from the VS Code extension.** Claude Code hands over the percentages only through the status line of the terminal client; the extension does not call it. Without a terminal session the program shows only token counts from the local files, and the older percentages go stale.
 - **No data without a running Claude Code session.** Claude Code hands over usage only while it runs and after its first response of a session. The percentages exist only for Claude.ai Pro and Max subscriptions.
 - **Other computers are not visible in the token statistics.** The cockpit shows what Claude Code on this computer hands over, and its transcript statistics cover this computer only.
 - **No support for API-key billing.** With an API key there are no such usage windows.
