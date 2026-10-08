@@ -121,7 +121,7 @@ fn req_022_reset_passed_text() {
     assert_eq!(no_data_text(&vm.five_hour), WINDOW_RESET_PASSED);
     assert_eq!(
         WINDOW_RESET_PASSED,
-        "Window reset. Waiting for new data from Claude Code."
+        "Window has reset. Nothing reported since; a new one starts with your next Claude Code message."
     );
     assert!(
         matches!(vm.seven_day, WindowView::Data(_)),
