@@ -29,6 +29,7 @@ Claude Code passes the usage percentages and reset times of both windows to a co
 
 | Document | Content |
 |---|---|
+| [docs/retrospective.md](docs/retrospective.md) | A critical look back at the autonomous project: what went wrong, why, and what has to change in future projects |
 | [docs/current-state.md](docs/current-state.md) | Where the program stands today: data sources, what works when, concept problems, how to use it anyway |
 | [docs/user-guide.md](docs/user-guide.md) | The manual: install the portable program, set it up, use it, read every value, remove everything again |
 | [docs/development-guide.md](docs/development-guide.md) | How to set up the tools, build, test and change the program by hand, without AI help |
