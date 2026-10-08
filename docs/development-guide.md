@@ -77,7 +77,19 @@ sh scripts/setup-dev-linux.sh            # report, ask, install what is missing,
 
 ### 1.3a macOS
 
-The script `scripts/setup-dev-macos.sh` is planned (#153) and does not exist yet. Until then, by hand (not tried): `xcode-select --install`, then rustup as above (`rustup toolchain install <channel> --profile minimal -c rustfmt -c clippy`), and `brew install cmake ninja`. You can already compile and lint for macOS from Windows, see [section 6](#6-checks-and-handing-a-change-in).
+The script `scripts/setup-dev-macos.sh` (POSIX `sh`, same options and exit codes as the Linux script, see section 1.3) does the same for a Mac with Apple Silicon:
+
+```
+sh scripts/setup-dev-macos.sh --check    # report only, installs nothing
+sh scripts/setup-dev-macos.sh            # report, ask, install what is missing, build once
+```
+
+- **What it checks:** the Xcode Command Line Tools (`xcode-select -p`; they bring the compiler, the linker and Git), rustup and the pinned toolchain with `rustfmt` and `clippy`, CMake and Ninja; curl only when rustup has to be installed. While the Command Line Tools are missing, Git and the compiler are **not run** (their stubs in `/usr/bin` would open the installation window).
+- **What it installs:** the Command Line Tools with `xcode-select --install` (macOS opens a window where you agree; the script waits up to 15 minutes, then says to run it again); rustup from the official installer without a default toolchain, then only the pinned toolchain; CMake and Ninja with `brew install` (only the missing ones). No step needs administrator rights.
+- **Homebrew is never installed by the script.** If it is missing and CMake or Ninja are needed, the script prints the official command and exits with code 3.
+- On an Intel Mac it works but says that Apple Silicon is the supported target.
+- **Tests:** the same test script as for Linux (`sh scripts/tests/setup-dev-unix.tests.sh`, 106 checks in all) covers the macOS script with stand-in programs: everything there, a missing tool (`--check`, no question possible, `--yes`), no Homebrew, missing Command Line Tools (not run, then installed and waited for, and the time limit), a missing rustup, the build, another system, an Intel Mac, help. They ran on Windows with Git for Windows bash.
+- **Not tried on a real Mac:** `xcode-select --install`, Homebrew, the rustup installer. The [HUMAN] issue for macOS asks for a real run.
 
 ### 1.4 Check that it works
 
@@ -262,7 +274,7 @@ If you used an AI tool anywhere, say so in the pull request (see [CONTRIBUTING.m
 ## 9. What is unfinished or untried
 
 - **Not tried:** Linux and macOS (build, window, setup, autostart, uninstall: issues #129, #134), a Windows without development tools (#124), the light theme, display scaling other than 100 %, several monitors.
-- **Planned scripts and builds:** the setup script for macOS (#153), the CMake builds for the other systems (#155, #156, #157).
+- **Planned builds:** the CMake builds for the other systems (#155, #156, #157).
 - **Open decisions of the owner:** the setting *Start view* is overwritten by the view that was shown last (#147), signing (#6), the release (#71).
 - **CI:** the only workflow checks that required files exist and that requirement ids are unique; building and testing on the four targets (#23) and the release workflow (#57) need the owner's go-ahead because they change workflow files.
 - **Documents still to do before a release:** the licence inventory (#58), the legal files (#64).
