@@ -18,7 +18,6 @@ const PATTERNS: &[&str] = &[
     "ui.label(\"",
     "Window::new(\"",
     "ui.checkbox(&mut draft.always_on_top, \"",
-    ".checkbox(&mut on, \"",
     ".checkbox(&mut delete, \"",
     "ui.radio_value(&mut draft.start_view, StartView::Compact, \"",
     "ui.radio_value(&mut draft.start_view, StartView::Detailed, \"",
@@ -42,7 +41,7 @@ fn labels() -> Vec<(String, String)> {
         .map(|entry| entry.expect("entry").path())
         .filter(|path| path.extension().is_some_and(|e| e == "rs"))
         .collect();
-    // the texts of the start entry (box and "switched off" note) are constants of this file
+    // the text of the box of the start entry that earlier versions had is a constant of this file
     files.push(std::path::PathBuf::from(format!("{ROOT}/src/autostart.rs")));
     for path in files {
         let source = fs::read_to_string(&path).expect("source can be read");
