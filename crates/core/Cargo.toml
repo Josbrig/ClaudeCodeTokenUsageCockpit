@@ -1,0 +1,23 @@
+[package]
+name = "cockpit-core"
+description = "Calculations, data store and view model of the usage cockpit (no GUI code)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "cockpit_core"
+
+[dependencies]
+chrono = "0.4.45"
+directories = "6.0.0"
+log = { version = "0.4.34", features = ["std"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.21"
+toml = "1.1.6"
+
+[dev-dependencies]
+chrono-tz = "0.10.4"
+tempfile = "3.27.0"

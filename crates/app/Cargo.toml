@@ -1,0 +1,37 @@
+[package]
+name = "usage-cockpit"
+description = "Always-on-top cockpit for Claude usage limits, including the status line bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "usage-cockpit"
+path = "src/main.rs"
+
+[dependencies]
+chrono = "0.4.45"
+clap = { version = "4.6.7", features = ["derive"] }
+cockpit-core = { version = "0.1.0", path = "../core" }
+eframe = "0.33.3"
+egui_plot = "0.34.1"
+log = { version = "0.4.34", features = ["std"] }
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+thiserror = "2.0.21"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Registry",
+    "Win32_System_Console",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+predicates = "3.1.4"
+tempfile = "3.27.0"

@@ -13,3 +13,9 @@ Thumbs.db
 /build/
 /dist/
 /out/
+
+# Rust build output
+/target
+
+# CMake build folder
+/build/

@@ -1,0 +1,6 @@
+{"type":"user","timestamp":"2026-03-01T10:00:00.000Z","message":{"role":"user","content":"hello"}}
+{"type":"assistant","timestamp":"2026-03-01T10:00:05.000Z","requestId":"req_001","message":{"id":"msg_001","model":"model-alpha","usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":200,"cache_read_input_tokens":0}}}
+{"type":"assistant","timestamp":"2026-03-01T10:01:00.000Z","requestId":"req_002","message":{"id":"msg_002","model":"model-alpha","usage":{"input_tokens":10,"output_tokens":20,"cache_creation_input_tokens":0,"cache_read_input_tokens":300}}}
+this line is not json at all
+{"type":"assistant","timestamp":"2026-03-01T10:01:30.000Z","requestId":"req_002","message":{"id":"msg_002","model":"model-alpha","usage":{"input_tokens":10,"output_tokens":25,"cache_creation_input_tokens":0,"cache_read_input_tokens":300}}}
+{"type":"assistant","timestamp":"2026-03-01T23:30:00.000Z","requestId":"req_003","message":{"id":"msg_003","model":"model-beta","usage":{"input_tokens":5,"output_tokens":7}}}
