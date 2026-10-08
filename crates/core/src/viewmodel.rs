@@ -27,7 +27,7 @@ pub const BANNER_LOAD_ERROR: &str = "Cannot read the data folder: ";
 /// Text of a window that has no value in the latest record.
 pub const WINDOW_NO_DATA: &str = "no data";
 /// Text of a window whose reset has passed without a newer record.
-pub const WINDOW_RESET_PASSED: &str = "Window has reset. Nothing reported since; a new one starts with your next Claude Code message.";
+pub const WINDOW_RESET_PASSED: &str = "Window has reset. Nothing reported since; it fills again with the next report from Claude Code.";
 
 /// Everything the view model is built from.
 pub struct Inputs<'a, Tz: TimeZone> {
