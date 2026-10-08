@@ -103,12 +103,12 @@ A box in the settings dialog makes the system start the cockpit when you sign in
 - It is **off by default** and the program never switches it on by itself. It needs no administrator rights. Unticking the box removes the entry again.
 - **Windows** (tried): one value `UsageCockpit` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`. When the box switches the entry on or off it also removes the cockpit's own mark under `...\Explorer\StartupApproved\Run` (where Windows keeps "switched off in the list of startup apps"); nothing else in the registry is touched.
 - **Linux** (compiled, not tried): a desktop entry `usage-cockpit.desktop` in the autostart folder of your desktop (`$XDG_CONFIG_HOME/autostart`, usually `~/.config/autostart`), which common desktops start at sign-in.
-- **macOS** (compiled, not tried): a LaunchAgent file `io.github.josbrig.usage-cockpit.plist` in `~/Library/LaunchAgents`, which macOS loads at the next login. Nothing is started or stopped when the box is ticked, so the entry counts from the next login.
+- **macOS** (compiled, not tried): a LaunchAgent file `io.github.josbrig.usage-cockpit.plist` in `~/Library/LaunchAgents`, which macOS loads at the next login. Nothing is started or stopped when the box is ticked, so the entry counts from the next login. A path of the program with a character that cannot be written into the file (not valid text, a control character) is refused with a message.
 
 The box shows what the system really has:
 
 - If the entry starts **another file** (you moved the program), the dialog says *The entry starts another file* and shows which; the button *Use this file* corrects it.
-- If you switched the entry off in the startup list of the system, the dialog says so and that ticking the box switches it on again: on Windows *Switched off in the Windows list of startup apps. Ticking the box switches it on again.*, on Linux *Switched off in the startup applications of your desktop. Ticking the box switches it on again.*, on macOS *Switched off in the login items of the system. Ticking the box switches it on again.* (macOS does not report this yet: it only knows whether the file is there.)
+- If you switched the entry off in the startup list of the system, the dialog says so and that ticking the box switches it on again: on Windows *Switched off in the Windows list of startup apps. Ticking the box switches it on again.*, on Linux *Switched off in the startup applications of your desktop. Ticking the box switches it on again.* (macOS does not report this: the program only knows whether the file is there; if you switched the entry off in the login items of the system, that stays in effect until you switch it on there.)
 
 ## 5. Using the window
 

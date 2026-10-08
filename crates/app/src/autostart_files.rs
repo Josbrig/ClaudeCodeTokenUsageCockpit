@@ -102,7 +102,8 @@ pub fn desktop_exec(exe: &Path) -> String {
     } else {
         path.replace('%', "%%")
     };
-    exec_level.replace('\\', "\\\\")
+    // a newline must not end the line of the file: it is written as the escape `\n`
+    exec_level.replace('\\', "\\\\").replace('\n', "\\n")
 }
 
 /// The text of the desktop entry file.
@@ -118,6 +119,8 @@ pub fn classify_desktop(contents: Option<&str>, exe: &Path) -> State {
     let Some(contents) = contents else {
         return State::Off;
     };
+    // a byte order mark in front of the first line would hide the group
+    let contents = contents.trim_start_matches('\u{feff}');
     let mut in_group = false;
     let (mut exec, mut hidden, mut disabled) = (None, false, false);
     for line in contents.lines() {
@@ -209,8 +212,21 @@ fn read_text(path: &Path) -> Result<Option<String>, String> {
     }
 }
 
+/// A path that cannot be written into a start entry as it is: not valid text, or with a control
+/// character (the entry would point at another path or be invalid).
+fn check_path(exe: &Path) -> Result<(), String> {
+    match exe.to_str() {
+        Some(text) if !text.chars().any(char::is_control) => Ok(()),
+        _ => Err(format!(
+            "the path of the program ({}) has a character that cannot be written into a start entry; move the program to a folder with an ordinary name",
+            exe.display()
+        )),
+    }
+}
+
 /// The real state of the entry `name` in `dir`.
 pub fn state_in(kind: Kind, dir: &Path, name: &str, exe: &Path) -> Result<State, String> {
+    check_path(exe)?;
     let contents = read_text(&entry_file(kind, dir, name))?;
     Ok(match kind {
         Kind::Desktop => classify_desktop(contents.as_deref(), exe),
@@ -222,6 +238,7 @@ pub fn state_in(kind: Kind, dir: &Path, name: &str, exe: &Path) -> Result<State,
 /// replaces a file that was switched off or that starts another program; removing a missing file
 /// is not an error.
 pub fn set_in(kind: Kind, dir: &Path, name: &str, exe: &Path, on: bool) -> Result<State, String> {
+    check_path(exe)?;
     let path = entry_file(kind, dir, name);
     if on {
         let text = match kind {
@@ -318,6 +335,8 @@ mod tests {
             desktop_exec(Path::new("/opt/a\\b/x")),
             "\"/opt/a\\\\\\\\b/x\""
         );
+        // a newline in a path is written as the escape `\n`, not as a line break
+        assert!(!desktop_exec(Path::new("/opt/a\nb/x")).contains('\n'));
         // a percent sign is doubled (it is a field code in `Exec`)
         assert_eq!(desktop_exec(Path::new("/opt/100%/x")), "/opt/100%%/x");
     }
@@ -465,6 +484,31 @@ mod tests {
             set_in(Kind::Desktop, dir, "usage-cockpit", &exe, true).unwrap(),
             State::On
         );
+    }
+
+    #[test]
+    fn req_118_a_path_that_cannot_be_written_is_refused() {
+        let root = tempfile::tempdir().unwrap();
+        for bad in ["/opt/a\nb/usage-cockpit", "/opt/a\u{1}b/usage-cockpit"] {
+            for kind in [Kind::Desktop, Kind::Plist] {
+                let error =
+                    set_in(kind, root.path(), "usage-cockpit", Path::new(bad), true).unwrap_err();
+                assert!(
+                    error.contains("cannot be written into a start entry"),
+                    "{error}"
+                );
+                assert!(state_in(kind, root.path(), "usage-cockpit", Path::new(bad)).is_err());
+            }
+        }
+        // nothing was written
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn req_118_a_desktop_entry_with_a_byte_order_mark_is_read() {
+        let exe = exe();
+        let text = format!("{}{}", '\u{feff}', desktop_entry(&exe));
+        assert_eq!(classify_desktop(Some(&text), &exe), State::On);
     }
 
     #[test]

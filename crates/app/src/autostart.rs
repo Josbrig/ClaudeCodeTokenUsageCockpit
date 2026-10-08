@@ -36,10 +36,8 @@ pub const LABEL: &str = "Start with the desktop session (when you log in)";
 #[cfg(windows)]
 pub const SWITCHED_OFF_TEXT: &str =
     "Switched off in the Windows list of startup apps. Ticking the box switches it on again.";
-#[cfg(target_os = "macos")]
-pub const SWITCHED_OFF_TEXT: &str =
-    "Switched off in the login items of the system. Ticking the box switches it on again.";
-#[cfg(all(not(windows), not(target_os = "macos")))]
+// On macOS this is never shown: the program only knows whether the file is there.
+#[cfg(not(windows))]
 pub const SWITCHED_OFF_TEXT: &str = "Switched off in the startup applications of your desktop. Ticking the box switches it on again.";
 
 /// What the system has for the cockpit.
