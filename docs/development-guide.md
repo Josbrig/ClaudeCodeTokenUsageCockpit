@@ -34,7 +34,7 @@ git switch develop
 | A **C++ toolchain** that the Rust linker uses | on Windows the Microsoft C++ Build Tools (MSVC); on Linux `build-essential`; on macOS the Xcode Command Line Tools |
 | **Git** | the repository; on Windows its `bash` is also used by some tests |
 | **CMake** and **Ninja** | the CMake builds (section 2); not needed for plain `cargo` |
-| On Linux: the development packages of the window toolkit (X11/Wayland, xkbcommon, OpenGL) and `pkg-config` | the window is built with them (not tried yet) |
+| On Linux: the run-time libraries of the window (X11, Wayland, xkbcommon, OpenGL/EGL) | the window loads them when it runs; nothing of them is needed to build it |
 
 ### 1.2 Windows
 
@@ -59,12 +59,25 @@ The pure parts of the script (reading the toolchain channel, the plan, the table
 
 **By hand**, the same: install [rustup](https://rustup.rs) and run `rustup toolchain install <channel from rust-toolchain.toml> --profile minimal -c rustfmt -c clippy`; install the [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/) with the C++ workload; install Git, CMake and Ninja.
 
-### 1.3 Linux and macOS
+### 1.3 Linux
 
-The scripts `scripts/setup-dev-linux.sh` and `scripts/setup-dev-macos.sh` are planned (#152, #153) and do not exist yet. Until then, by hand (you can already compile and lint for these systems from Windows, see [section 6](#6-checks-and-handing-a-change-in)):
+The script `scripts/setup-dev-linux.sh` (POSIX `sh`) does for Linux what the Windows script does: it looks at what is there, says what is missing, and installs only that, after asking:
 
-- **Linux** (Debian, Ubuntu, Raspberry Pi OS; not tried): `sudo apt install build-essential pkg-config cmake ninja-build git libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev libgl1-mesa-dev`, then rustup as above.
-- **macOS** (not tried): `xcode-select --install`, then rustup as above, and `brew install cmake ninja`.
+```
+sh scripts/setup-dev-linux.sh --check    # report only, installs nothing
+sh scripts/setup-dev-linux.sh            # report, ask, install what is missing, build once
+```
+
+- **Options:** `--check` (install nothing; exit code 1 if something is missing), `--yes` or `-y` (do not ask), `--skip-build` (no `cargo build` at the end), `--help`. **Exit codes:** 0 everything is there or was installed, 1 something is missing (`--check`), the question was declined or could not be asked (no terminal and no `--yes`), 2 a step failed, 3 this is not Linux, or system packages are missing that the script cannot install here (another package manager, or no root rights and no `sudo`); it prints their names.
+- **What it checks:** rustup and the pinned toolchain with `rustfmt` and `clippy`; a C compiler (`cc`, the linker driver), Git, CMake and Ninja; curl, but only when rustup has to be installed; and the **run-time libraries of the window** (`libxkbcommon`, `libxkbcommon-x11`, `libwayland-client`, `libX11`, `libXcursor`, `libXi`, `libXrandr`, `libxcb`, `libGL`, `libEGL`), looked up with `ldconfig -p`. A desktop has them; a minimal server image does not. **Building needs no development packages**: the window libraries are loaded when the program runs (`dlopen`), so the build needs only the compiler. (This was checked in the dependency tree: no crate links a system library at build time.)
+- **What it installs:** on Debian, Ubuntu and Raspberry Pi OS (`apt-get` exists, and you are root or have `sudo`) the missing system packages with `sudo apt-get install -y ...`; **sudo is used for that step only**, and the plan says so before it asks. rustup comes from the official installer, downloaded to a file first (a failed download is an error), run **without a default toolchain**; then only the pinned toolchain is installed. That needs no root rights, but the rustup installer adds `~/.cargo/bin` to the `PATH` in your shell profile. On other families (Fedora, Arch, openSUSE) and without root rights or `sudo`, it installs only rustup and the toolchain and prints the package names (`dnf`, `pacman`, `zypper`, or `apt-get install ...` to run as administrator), also with `--check`.
+- It can be run again at any time; what is present is not touched. After an installation open a new terminal (the script itself looks in `~/.cargo/bin` already).
+- **Tests:** `sh scripts/tests/setup-dev-unix.tests.sh` runs the scripts with stand-in programs in a fake home: nothing is installed, no network is used, and the scripts see only a `PATH` with the stand-ins and a few wrapped basic tools, so a real `ninja`, `apt-get` or `sudo` on the computer that runs the tests cannot change a result. It covers the helpers (reading the channel, the version line, the list of missing tools), the Linux script (everything there, a missing tool, no question possible, `--yes`, root and no root, no `sudo`, a missing library, no `ldconfig`, a missing rustup with the installer called without a default toolchain, a failed download, a toolchain without clippy, the build and a failing build, another system, another package manager, arm64, a start from another folder, the options) and the syntax with `dash`. It ran on Windows with Git for Windows bash (69 checks).
+- **Not tried on a real Linux:** the real `apt-get`, `sudo`, the rustup installer, and `ldconfig -p` on a real distribution (the package names are those of Debian and Ubuntu; check them if a library is still reported missing after the installation). `shellcheck` was not available; the files carry its directives for the two places where it would complain. The [HUMAN] issue for Linux asks for a real run.
+
+### 1.3a macOS
+
+The script `scripts/setup-dev-macos.sh` is planned (#153) and does not exist yet. Until then, by hand (not tried): `xcode-select --install`, then rustup as above (`rustup toolchain install <channel> --profile minimal -c rustfmt -c clippy`), and `brew install cmake ninja`. You can already compile and lint for macOS from Windows, see [section 6](#6-checks-and-handing-a-change-in).
 
 ### 1.4 Check that it works
 
@@ -249,7 +262,7 @@ If you used an AI tool anywhere, say so in the pull request (see [CONTRIBUTING.m
 ## 9. What is unfinished or untried
 
 - **Not tried:** Linux and macOS (build, window, setup, autostart, uninstall: issues #129, #134), a Windows without development tools (#124), the light theme, display scaling other than 100 %, several monitors.
-- **Planned scripts and builds:** the setup scripts for Linux and macOS (#152, #153), the CMake builds for them (#155, #156, #157).
+- **Planned scripts and builds:** the setup script for macOS (#153), the CMake builds for the other systems (#155, #156, #157).
 - **Open decisions of the owner:** the setting *Start view* is overwritten by the view that was shown last (#147), signing (#6), the release (#71).
 - **CI:** the only workflow checks that required files exist and that requirement ids are unique; building and testing on the four targets (#23) and the release workflow (#57) need the owner's go-ahead because they change workflow files.
 - **Documents still to do before a release:** the licence inventory (#58), the legal files (#64).
