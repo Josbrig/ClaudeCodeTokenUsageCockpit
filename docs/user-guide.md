@@ -240,6 +240,8 @@ The program installs nothing, so removing it is deleting its file. Before you do
 2. **Read the result and press OK.** The cockpit closes itself. If you chose to delete the data, a small hidden helper of the same program (started when you pressed *Remove everything*) waits until the window has closed and then deletes the folders; it deletes nothing if the window is still open after five minutes or if the bridge is still set up. It has no window and cannot report problems: if a folder of the table in section 8 is still there after a minute, delete it by hand.
 3. **Delete the program file by hand.** The program cannot delete itself.
 
+*Remove everything* works the same on Linux and macOS (compiled and linted there, not tried): the hidden helper waits for the window with `kill -0` instead of a Windows call, and on macOS, where the data and the configuration are one folder, that folder is cleaned once.
+
 What stays: the copies of your Claude Code settings (`settings.json.usage-cockpit-backup-*`) next to `settings.json`, and any file in the data or configuration folder that the cockpit did not create (the folders are cleaned file by file and only removed when they are empty). If something in the list could not be done, the cockpit stays open and says what failed (it does not close, so you can read it); the history and settings are then kept, because the stored status line is needed to put your old one back.
 
 By hand, the same is: remove the bridge ([section 4.2](#42-remove-the-bridge-only)), untick the start entry (*Start with Windows* on Windows), close the cockpit, delete the folders of section 8, delete the program file.
