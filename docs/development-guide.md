@@ -16,6 +16,16 @@ How to develop the program by hand, without an AI assistant: set up the tools, u
 
 ## 1. Setting up the tools
 
+### 1.0 Get the repository
+
+```
+git clone https://github.com/Josbrig/ClaudeCodeTokenUsageCockpit.git
+cd ClaudeCodeTokenUsageCockpit
+git switch develop
+```
+
+`develop` is the branch that work is based on and that pull requests go to (`main` holds releases). If you do not have the right to push to the repository, fork it on GitHub, push your branch to your fork and open the pull request from there.
+
 ### 1.1 What is needed
 
 | Tool | Why |
@@ -31,9 +41,11 @@ How to develop the program by hand, without an AI assistant: set up the tools, u
 The script `scripts/setup-dev-windows.ps1` looks at what is there, says what is missing, and installs only that, after asking:
 
 ```
-powershell -File scripts\setup-dev-windows.ps1 -CheckOnly   # report only, installs nothing
-powershell -File scripts\setup-dev-windows.ps1              # report, ask, install what is missing, build once
+powershell -ExecutionPolicy Bypass -File scripts\setup-dev-windows.ps1 -CheckOnly   # report only, installs nothing
+powershell -ExecutionPolicy Bypass -File scripts\setup-dev-windows.ps1              # report, ask, install what is missing, build once
 ```
+
+`-ExecutionPolicy Bypass` is needed on a Windows whose policy refuses scripts that are not signed (the default of a client Windows); it applies to this one call only and changes no setting. If you downloaded the file as a zip, `Unblock-File scripts\*.ps1` does the same for good.
 
 - `-CheckOnly` installs nothing and exits with 1 if something is missing. The exit code is also 1 when you decline the question or no question can be asked, 2 when an installation fails, and 0 when everything is there or was installed.
 - Without it, the script lists what it would install and asks `Install the missing tools? [y/N]`. `-Yes` skips the question (for use in a script); in a place where no question can be asked (no terminal) and without `-Yes` it installs nothing.
@@ -43,7 +55,7 @@ powershell -File scripts\setup-dev-windows.ps1              # report, ask, insta
 - At the end it runs `cargo build` once to prove that the setup works (`-SkipBuild` leaves that out) and prints the commands to build and test.
 - After an installation, open a **new terminal** so that the new tools are on the `PATH` of the programs you start. The script itself also looks at the `PATH` that Windows has stored, so running it again in the same terminal does not install a tool twice.
 
-The pure parts of the script (reading the toolchain channel, the plan, the table, the `winget` arguments, the stored `PATH`) and its flow (exit codes, consent, which tools would be installed, with the installers replaced by fakes) have a test script that installs nothing: `powershell -File scripts\tests\setup-dev-windows.tests.ps1`. Tried for real: Ninja was installed by the script (for the user, exit code 0).
+The pure parts of the script (reading the toolchain channel, the plan, the table, the `winget` arguments, the stored `PATH`) and its flow (exit codes, consent, which tools would be installed, with the installers replaced by fakes) have a test script that installs nothing: `powershell -ExecutionPolicy Bypass -File scripts\tests\setup-dev-windows.tests.ps1`. Tried for real: Ninja was installed by the script (for the user, exit code 0).
 
 **By hand**, the same: install [rustup](https://rustup.rs) and run `rustup toolchain install <channel from rust-toolchain.toml> --profile minimal -c rustfmt -c clippy`; install the [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/) with the C++ workload; install Git, CMake and Ninja.
 
@@ -171,8 +183,10 @@ $env:CLAUDE_CONFIG_DIR  = "$env:TEMP\cockpit-try\claude"
 $now = [DateTimeOffset]::UtcNow
 $record = '{"session_id":"s","rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":' + $now.AddHours(3).ToUnixTimeSeconds() + '},"seven_day":{"used_percentage":41.2,"resets_at":' + $now.AddDays(3).ToUnixTimeSeconds() + '}}}'
 $record | cargo run -q -- bridge        # prints: 5h 23.5% · 7d 41.2%
-cargo run -q                            # the window shows these numbers
+cargo run -q                            # the window shows these numbers; close it to get the terminal back
 ```
+
+The first `cargo run` builds the whole program and prints nothing for a few minutes (`-q` hides the progress; leave it out to see it). The program is built for the Windows GUI subsystem: if you start `target\debug\usage-cockpit.exe` yourself instead of through `cargo run`, PowerShell does not wait for it, `$LASTEXITCODE` stays empty and the output can come later; use `cargo run`, or `Start-Process -Wait -RedirectStandardInput ... -RedirectStandardOutput ...` as the scripts in `scripts/` do.
 
 On Linux and macOS (not tried) the same with `export` and `printf '%s' '...' | cargo run -q -- bridge`; the future times come from `date -d '+3 hours' +%s` (Linux) or `date -v+3H +%s` (macOS). Feed several records with rising percentages a few minutes apart to see the usage rate, the forecast and the chart.
 
@@ -195,7 +209,7 @@ cargo test --all
 - **Commit message:** `<type>: <what>` in English, with the footer `Refs #<issue>`; types as in Conventional Commits (`feat`, `fix`, `docs`, `test`, `refactor`, `build`, `chore`).
 - **Pull request:** use the template (what and why, the requirements, the evidence as real commands with real output, a self-review from the reviewer's point of view, an independent review, follow-ups). Write `Refs #<issue>`, not `Closes`. State what you did **not** try.
 - **Review:** someone who did not write the change reads the diff against the requirement. Findings are fixed, not only noted.
-- **Merge:** into `develop` with a merge commit, after the required CI check is green; branches are kept. Changes to `main`, tags and releases are the owner's decision.
+- **Merge:** into `develop` with a merge commit, after the required CI check is green; branches are kept. Note that this check only looks at the repository files (the required files exist, requirement ids are unique): it does **not** build or test the code yet (section 9), so the three local commands above are the only gate for the code. Changes to `main`, tags and releases are the owner's decision.
 - **After the merge:** a closing note on the issue with the pull request, the requirements' state and the effort.
 
 If you used an AI tool anywhere, say so in the pull request (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
@@ -211,7 +225,7 @@ If you used an AI tool anywhere, say so in the pull request (see [CONTRIBUTING.m
 
 ## 8. Debugging
 
-- **Read the log first.** `log.txt` in the data folder (section "Where your data is" of the user guide) has one line per event of the bridge and the window, at level info and above, without the content of what Claude Code sent.
+- **Read the log first.** `log.txt` in the data folder (section "Where your data is" of the user guide) has the events of the bridge and the window at level info and above (a start, a changed Claude Code version, a pruned history, every warning and error), without the content of what Claude Code sent. A normal successful bridge call writes nothing.
 - **The window does not appear.** Run it from a terminal with `cargo run` and read what it prints; check `log.txt`; a second window shows only *usage-cockpit is already running.* (a first one runs: its lock is `cockpit.lock` in the data folder); on Linux check that the X11 or Wayland libraries are installed.
 - **The bridge prints nothing or the wrong text.** Run it by hand as in section 5 and read what it prints; remember that it must exit with 0 and answer even for broken input (`echo not json | cargo run -q -- bridge` prints `usage-cockpit: no data` and writes `last_error.json`). A *kept* status line runs through `shell.rs`: its output replaces the bridge's own text, and a failure or a timeout of one second brings the own text back.
 - **A value is wrong.** Find the pure function in `cockpit-core` and write the failing test with the numbers you see; the functions take the time as a parameter, so you can reproduce any moment.
