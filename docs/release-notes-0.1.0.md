@@ -19,7 +19,7 @@ A small window that shows how much of the 5-hour and the 7-day limit of Claude C
 
 1. Start `usage-cockpit-0.1.0-windows-x64.exe` (any folder).
 2. Press *Set up bridge* and confirm.
-3. Open Claude Code **in a terminal** (`claude`) and send a message. The rows fill after the answer.
+3. Open Claude Code **in a terminal** (`claude`) and send a message. The rows fill after the answer (picture: [starting-claude-code-in-a-terminal.png](images/starting-claude-code-in-a-terminal.png)).
 
 The full manual: [user-guide.md](user-guide.md). Where the program stands and why: [current-state.md](current-state.md). What went wrong in the project and what was learned: [retrospective.md](retrospective.md).
 
