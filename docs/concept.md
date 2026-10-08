@@ -369,7 +369,7 @@ Instead of zero values the window shows one of these texts (decided in the view 
 
 ## 12. Licences (REQ-107)
 
-`cargo deny check licenses` in CI with `deny.toml` allowing: MIT, Apache-2.0, Apache-2.0 WITH LLVM-exception, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, Unicode-3.0, OFL-1.1, Ubuntu-font-1.0, MPL-2.0 (file-level copyleft, unmodified use). `THIRD_PARTY_LICENSES.md` is generated with `cargo about` (or a script over `cargo metadata`) and committed for each release.
+`cargo deny check licenses` in CI with `deny.toml` allowing: MIT, Apache-2.0, Apache-2.0 WITH LLVM-exception, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, Unicode-3.0, OFL-1.1, Ubuntu-font-1.0, BSL-1.0 (Boost; permissive, used by `clipboard-win` and `error-code` below `eframe`; added 2026-10-08 after the first run of `cargo deny`, for the owner to confirm), MPL-2.0 (file-level copyleft, unmodified use). `THIRD_PARTY_LICENSES.md` is generated with `cargo about` (or a script over `cargo metadata`) and committed for each release.
 
 ## 13. Versioning
 

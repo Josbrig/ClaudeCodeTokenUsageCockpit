@@ -2,7 +2,7 @@
 
 A tiny, always-on-top cockpit that shows your Claude **5-hour** and **weekly** usage limits as live as possible and tells you at a glance whether you are using them faster or slower than an even pace. The goal: use your whole quota, but never run out before the reset.
 
-> **Status: under development, no release yet.** The program works on Windows (tried); Linux and macOS are not tried yet. Releases will appear on the GitHub *Releases* page. Until then you can build it yourself (see below). Read the [user guide](docs/user-guide.md) for how to start it, connect it to Claude Code and understand the values.
+> **Status: pre-release 0.1.0 (Windows x64), see the [release notes](docs/release-notes-0.1.0.md).** Live percentages only while Claude Code runs **in a terminal**; the VS Code extension apparently does not deliver them. Linux and macOS: compiled, never run. Read [what works when and why](docs/current-state.md) and the [critical look back](docs/retrospective.md) before you rely on it. The [user guide](docs/user-guide.md) explains how to start it, connect it to Claude Code and read the values.
 
 ## Screenshots
 
@@ -64,4 +64,4 @@ This is an unofficial project. It is not affiliated with, endorsed by, or sponso
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[Apache License 2.0](LICENSE). Copyright and trademark notes: [NOTICE](NOTICE). The licences of the components built into the program: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) (made with `scripts/third-party-licenses.ps1` or `.sh`; `cargo deny check licenses` accepts only the licences listed in `deny.toml`).

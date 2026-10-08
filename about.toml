@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Settings of `cargo about` for THIRD_PARTY_LICENSES.md (concept section 12, REQ-107).
+# Use scripts/third-party-licenses.ps1 (Windows) or scripts/third-party-licenses.sh.
+
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    "BSL-1.0",
+    "MPL-2.0",
+]
+
+# Platform specific dependencies are part of the list too.
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+]
+
+# The bundled fonts of egui (Ubuntu-Light, Hack, emoji fonts) are in the licence data of the
+# `epaint_default_fonts` package that cargo about reads.
+ignore-dev-dependencies = true
+ignore-build-dependencies = false

@@ -59,6 +59,9 @@ Only the owner changes an approved requirement. The concept problems above conce
 
 1. Start `usage-cockpit.exe` (portable; any folder). In the window press *Set up bridge* and confirm. This is the only change to your Claude Code settings; *Remove bridge* undoes it.
 2. Open **Claude Code in a terminal** (in VS Code: *Terminal*, *New Terminal*, then `claude`) and send a message. After its answer the rows show the percentages and the charts fill.
+
+   ![The input box of Claude Code in a terminal (started with `claude`), with a sample request; the name of the Windows user in the path is blacked out](images/starting-claude-code-in-a-terminal.png)
+
 3. Keep working in the terminal if you want live values. In the extension alone the percentages stand still.
 4. The detailed view (key `D`) shows token statistics per day and per model with charts, from the local files; they work at any time.
 
