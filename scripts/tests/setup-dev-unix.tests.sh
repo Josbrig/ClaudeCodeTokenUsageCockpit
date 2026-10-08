@@ -47,7 +47,7 @@ trap 'cleanup; exit 143' TERM
 CHANNEL=$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$REPO/rust-toolchain.toml" | head -n 1)
 
 # The real basic tools, found before the PATH is replaced; the world gets wrappers that call them.
-BASIC_TOOLS="sed head cat dirname basename mkdir chmod rm mktemp tr"
+BASIC_TOOLS="sed head cat dirname basename mkdir chmod rm mktemp tr sleep touch"
 REAL_DIR="$TMP/real"
 mkdir -p "$REAL_DIR"
 for tool in $BASIC_TOOLS; do
@@ -113,6 +113,11 @@ run_script() {
 }
 
 log() { cat "$WORLD/log"; }
+
+# settings for the macOS script: no Homebrew folders of this computer, no waiting
+export COCKPIT_SETUP_BREW_DIRS=""
+export COCKPIT_SETUP_POLL_SECONDS=0
+export COCKPIT_SETUP_WAIT_SECONDS=2
 
 # ---------------------------------------------------------------- the common helpers
 helper() {
@@ -293,6 +298,177 @@ run_script "$LINUX" -y --check --skip-build
 expect 'the short -y is accepted' "$CODE" 0
 run_script "$LINUX" --frobnicate
 expect 'an unknown option: exit code 2' "$CODE" 2
+
+# ---------------------------------------------------------------- macOS
+MACOS="$SCRIPTS/setup-dev-macos.sh"
+
+# A Mac that has everything.
+full_macos() {
+    new_world "$1"
+    program uname 'if [ "${1:-}" = -s ]; then echo Darwin; else echo arm64; fi'
+    # the Command Line Tools are there when the file "clt" exists; --install makes them appear
+    : > "$WORLD/clt"
+    mkdir -p "$WORLD/CommandLineTools"
+    program xcode-select "case \"\$1\" in -p) [ -f '$WORLD/clt' ] && echo '$WORLD/CommandLineTools' && exit 0; exit 2;; --install) echo \"xcode-select --install\" >> '$WORLD/log'; : > '$WORLD/clt';; esac"
+    program cc 'echo "Apple clang version 17"'
+    program git 'echo "git version 2.0.0"'
+    program curl "if [ \"\${1:-}\" = --version ]; then echo 'curl 8.0.0'; else echo \"curl \$*\" >> '$WORLD/log'; fi"
+    program cmake 'echo "cmake version 3.30.0"'
+    program ninja 'echo 1.12.0'
+    program brew "echo \"brew \$*\" >> '$WORLD/log'"
+    program cargo "echo \"cargo \$*\" >> '$WORLD/log'; echo cargo 1.0.0"
+    program rustup "case \"\$1\" in --version) echo 'rustup 1.29.0';; toolchain) case \"\$2\" in list) echo '$CHANNEL-aarch64-apple-darwin (default)';; install) echo \"rustup \$*\" >> '$WORLD/log';; esac;; component) echo 'rustfmt-aarch64-apple-darwin'; echo 'clippy-aarch64-apple-darwin';; esac"
+}
+
+full_macos all
+run_script "$MACOS" --check --skip-build
+expect 'macos: everything there: exit code 0' "$CODE" 0
+expect_contains 'macos: everything there: says so' "$OUT" 'Everything is there.'
+expect_contains 'macos: the Command Line Tools row shows the folder' "$OUT" 'CommandLineTools'
+expect_contains 'macos: the toolchain row names the channel' "$OUT" "$CHANNEL-aarch64-apple-darwin with rustfmt and clippy"
+expect 'macos: check installs nothing' "$(log)" ''
+
+full_macos ninja
+rm "$WORLD_BIN/ninja"
+run_script "$MACOS" --check --skip-build
+expect 'macos: check with a missing tool: exit code 1' "$CODE" 1
+expect_contains 'macos: the missing tool is listed with the brew command' "$OUT" 'brew install ninja'
+expect 'macos: check installs nothing here either' "$(log)" ''
+run_script "$MACOS" --skip-build
+expect 'macos: no terminal and no --yes: exit code 1' "$CODE" 1
+expect_contains 'macos: says that no question can be asked' "$OUT" 'No question can be asked here'
+expect_contains 'macos: the plan names the Homebrew package' "$OUT" 'with Homebrew: ninja'
+expect 'macos: not agreed installs nothing' "$(log)" ''
+run_script "$MACOS" --yes --skip-build
+expect 'macos: --yes installs the missing tool: exit code 0' "$CODE" 0
+expect 'macos: only that Homebrew package is installed' "$(log)" 'brew install ninja'
+
+# Homebrew is missing: it is named, never installed
+full_macos nobrew
+rm "$WORLD_BIN/ninja" "$WORLD_BIN/cmake" "$WORLD_BIN/brew"
+run_script "$MACOS" --check --skip-build
+expect 'macos: no Homebrew, check: exit code 1' "$CODE" 1
+expect_contains 'macos: the official Homebrew command is printed' "$OUT" 'raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
+run_script "$MACOS" --yes --skip-build
+expect 'macos: only Homebrew packages missing and no Homebrew: exit code 3' "$CODE" 3
+expect 'macos: nothing was installed' "$(log)" ''
+
+# the Command Line Tools are missing: stubs are not run before they are there, the installation is
+# started and waited for
+full_macos clt
+rm "$WORLD/clt"
+run_script "$MACOS" --check --skip-build
+expect_contains 'macos: missing Command Line Tools are listed' "$OUT" 'MISSING  Xcode Command Line Tools'
+expect_contains 'macos: with the command' "$OUT" 'xcode-select --install'
+expect 'macos: check does not start the installation' "$(log)" ''
+run_script "$MACOS" --yes --skip-build
+expect 'macos: the tools are installed and waited for: exit code 0' "$CODE" 0
+expect_contains 'macos: the plan says that macOS asks in its own window' "$OUT" 'macOS asks you in its own window'
+expect 'macos: xcode-select --install was run once' "$(log)" 'xcode-select --install'
+
+# the installation is never agreed to in the window: the script gives up after the time limit
+full_macos cltwait
+rm "$WORLD/clt"
+program xcode-select "case \"\$1\" in -p) exit 2;; --install) echo 'xcode-select --install' >> '$WORLD/log';; esac"
+run_script "$MACOS" --yes --skip-build
+expect 'macos: the tools never appear: exit code 2' "$CODE" 2
+expect_contains 'macos: says to run the script again' "$OUT" 'run the script again when the installation is done'
+
+# rustup and the toolchain are missing
+full_macos rustup
+rm "$WORLD_BIN/rustup" "$WORLD_BIN/cargo"
+program curl "if [ \"\${1:-}\" = --version ]; then echo 'curl 8.0.0'; exit 0; fi
+echo \"curl \$*\" >> '$WORLD/log'
+while [ \$# -gt 0 ]; do [ \"\$1\" = -o ] && out=\$2; shift; done
+cat > \"\$out\" <<'INSTALLER'
+echo \"installer args: \$*\" >> '$WORLD/log'
+mkdir -p \"\$HOME/.cargo/bin\"
+printf '#!/bin/sh\necho \"rustup \$*\" >> $WORLD/log\ncase \"\$1\" in --version) echo rustup 1.29.0;; toolchain) if [ \"\$2\" = list ]; then echo \"$CHANNEL-aarch64-apple-darwin (default)\"; fi;; component) echo rustfmt; echo clippy;; esac\n' > \"\$HOME/.cargo/bin/rustup\"
+chmod +x \"\$HOME/.cargo/bin/rustup\"
+INSTALLER"
+run_script "$MACOS" --yes --skip-build
+expect 'macos: rustup installation: exit code 0' "$CODE" 0
+LOGTEXT=$(log)
+expect_contains 'macos: the installer is called without a default toolchain' "$LOGTEXT" 'installer args: -y --default-toolchain none --profile minimal'
+expect_contains 'macos: then the pinned toolchain is installed' "$LOGTEXT" "rustup toolchain install $CHANNEL --profile minimal -c rustfmt -c clippy"
+expect_not_contains 'macos: Homebrew is not touched for that' "$LOGTEXT" 'brew'
+
+# the build at the end, and another system
+full_macos build
+run_script "$MACOS" --yes
+expect 'macos: the build runs at the end: exit code 0' "$CODE" 0
+expect_contains 'macos: cargo build was run' "$(log)" 'cargo build'
+full_macos linux
+program uname 'if [ "${1:-}" = -s ]; then echo Linux; else echo x86_64; fi'
+run_script "$MACOS"
+expect 'macos script on another system: exit code 3' "$CODE" 3
+full_macos intel
+program uname 'if [ "${1:-}" = -s ]; then echo Darwin; else echo x86_64; fi'
+run_script "$MACOS" --check --skip-build
+expect 'macos on an Intel Mac: works, with a note' "$CODE" 0
+expect_contains 'macos on an Intel Mac: the note names the Apple Silicon target' "$OUT" 'Apple Silicon'
+run_script "$MACOS" --help
+expect 'macos: help: exit code 0' "$CODE" 0
+expect_contains 'macos: help: shows the usage' "$OUT" 'Usage:'
+
+# an Apple Silicon Mac whose terminal runs under Rosetta
+full_macos rosetta
+program uname 'if [ "${1:-}" = -s ]; then echo Darwin; else echo x86_64; fi'
+program sysctl 'echo 1'
+run_script "$MACOS" --check --skip-build
+expect_contains 'macos under Rosetta: the note says so' "$OUT" 'runs under Rosetta'
+
+# both Homebrew packages missing: one call
+full_macos both
+rm "$WORLD_BIN/ninja" "$WORLD_BIN/cmake"
+run_script "$MACOS" --yes --skip-build
+expect 'macos: both packages: exit code 0' "$CODE" 0
+expect 'macos: one brew call with both' "$(log)" 'brew install cmake ninja'
+
+# the Command Line Tools and Homebrew are both missing: the tools are installed, then exit code 3
+full_macos partial
+rm "$WORLD/clt" "$WORLD_BIN/cmake" "$WORLD_BIN/brew"
+run_script "$MACOS" --yes --skip-build
+expect 'macos: tools installed but no Homebrew: exit code 3' "$CODE" 3
+expect_contains 'macos: says what is still missing' "$OUT" 'CMake and Ninja are still missing'
+expect 'macos: the Command Line Tools were installed' "$(log)" 'xcode-select --install'
+
+# `xcode-select --install` fails and the tools do not appear (no screen): no long waiting for nothing
+full_macos headless
+rm "$WORLD/clt"
+program xcode-select "case \"\$1\" in -p) exit 2;; --install) echo 'xcode-select: error: no installer' >&2; exit 1;; esac"
+run_script "$MACOS" --yes --skip-build
+expect 'macos: the installation cannot start: exit code 2' "$CODE" 2
+
+# the tools appear only after a few looks (the installation window takes time)
+full_macos slow
+rm "$WORLD/clt"
+program xcode-select "case \"\$1\" in -p) n=\$(cat '$WORLD/looks' 2>/dev/null || echo 0); n=\$((n + 1)); echo \$n > '$WORLD/looks'; if [ \$n -ge 4 ]; then mkdir -p '$WORLD/clt-dir'; echo '$WORLD/clt-dir'; exit 0; fi; exit 2;; --install) echo 'xcode-select --install' >> '$WORLD/log'; exit 0;; esac"
+COCKPIT_SETUP_WAIT_SECONDS=20 run_script "$MACOS" --yes --skip-build
+expect 'macos: the wait ends when the tools appear: exit code 0' "$CODE" 0
+expect_contains 'macos: says that the tools are installed' "$OUT" 'The Command Line Tools are installed.'
+expect_contains 'macos: the installation window is explained while waiting' "$OUT" 'agree there'
+
+# a path of selected tools that no longer exists is not "present"
+full_macos stale
+program xcode-select "case \"\$1\" in -p) echo /no/such/folder; exit 0;; esac"
+run_script "$MACOS" --check --skip-build
+expect_contains 'macos: a selected folder that is gone counts as missing' "$OUT" 'MISSING  Xcode Command Line Tools'
+
+# the first Homebrew folder that has brew wins
+full_macos brewdirs
+rm "$WORLD_BIN/ninja" "$WORLD_BIN/brew"
+mkdir -p "$WORLD/arm" "$WORLD/intel"
+printf '#!/bin/sh\necho "brew-arm $*" >> %s/log\n' "$WORLD" > "$WORLD/arm/brew"
+printf '#!/bin/sh\necho "brew-intel $*" >> %s/log\n' "$WORLD" > "$WORLD/intel/brew"
+chmod +x "$WORLD/arm/brew" "$WORLD/intel/brew"
+COCKPIT_SETUP_BREW_DIRS="$WORLD/arm $WORLD/intel" run_script "$MACOS" --yes --skip-build
+expect 'macos: the first Homebrew folder is used' "$(log)" 'brew-arm install ninja'
+
+# values that are not numbers fall back to the defaults instead of looping forever
+full_macos badnumbers
+COCKPIT_SETUP_WAIT_SECONDS=abc COCKPIT_SETUP_POLL_SECONDS=x run_script "$MACOS" --check --skip-build
+expect 'macos: bad wait settings are ignored: exit code 0' "$CODE" 0
 
 # ---------------------------------------------------------------- syntax with the strictest shell
 for script in "$SCRIPTS/lib/setup-dev-common.sh" "$LINUX" "$SCRIPTS/setup-dev-macos.sh"; do
