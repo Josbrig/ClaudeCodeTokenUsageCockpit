@@ -83,7 +83,7 @@ A Cargo workspace with two crates:
 | `setup` | Sets the bridge up and removes it in the Claude Code settings (section 7). |
 | `quoting` | Quoting of the bridge command for `sh -c` and reading it back; no dependencies, compiled everywhere. |
 | `commands` | The command line side of setup, removal and uninstall: asking, printing, exit codes. |
-| `autostart` | The start entry of the system (section 7.3). |
+| `autostart` | The start entry of the system (section 7.3); `autostart_files` has the files of Linux and macOS. |
 | `uninstall` | *Remove everything* (section 7.4). |
 | `instance` | One window per user: an exclusive lock on `cockpit.lock`. |
 | `gui` | The window: `mod.rs` (the application object), `state.rs` (data and threads), `compact.rs`, `detailed.rs`, `chart.rs` (history chart), `bars.rs` (token bar charts), `theme.rs` (colours and symbols), `settings_view.rs`, `bridge_view.rs`, `uninstall_view.rs` (dialogs), `window_state.rs` (position, size, level). |
@@ -226,7 +226,13 @@ On Windows the command line cannot ask a question reliably (after attaching to t
 
 ### 7.3 The start entry (`autostart`)
 
-**Windows:** one value `UsageCockpit` below `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`, holding the quoted path of the executable; no administrator rights. The *real* state is read, not remembered: *off*, *on*, *stale* (the entry starts another file, because the program was moved), or *switched off in the Windows list of startup apps* (Windows keeps that in `...\Explorer\StartupApproved\Run`; a first byte with the lowest bit set means off). Switching on or off also removes the cockpit's own mark in `StartupApproved\Run` so that a switched-off entry can be switched on again. The setting is offered in the settings dialog, acts at once, and is **never** switched on by itself. With `USAGE_COCKPIT_HOME` set, the value is called `UsageCockpitTestHome`, so a test never touches a real entry. Linux and macOS have no such switch yet; the module reports *unsupported* there.
+**Windows:** one value `UsageCockpit` below `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`, holding the quoted path of the executable; no administrator rights. The *real* state is read, not remembered: *off*, *on*, *stale* (the entry starts another file, because the program was moved), or *switched off in the Windows list of startup apps* (Windows keeps that in `...\Explorer\StartupApproved\Run`; a first byte with the lowest bit set means off). Switching on or off also removes the cockpit's own mark in `StartupApproved\Run` so that a switched-off entry can be switched on again. The setting is offered in the settings dialog, acts at once, and is **never** switched on by itself. With `USAGE_COCKPIT_HOME` set, the value is called `UsageCockpitTestHome`, so a test never touches a real entry. 
+
+**Linux** (compiled and linted, **not tried**): a desktop entry `usage-cockpit.desktop` in `$XDG_CONFIG_HOME/autostart` (a relative or empty `XDG_CONFIG_HOME` is ignored; default `~/.config/autostart`) with `Type`, `Name`, `Comment`, `Exec`, `Terminal=false` and `X-GNOME-Autostart-enabled=true`. `Exec` is quoted as the Desktop Entry Specification wants it (double quotes for reserved characters, `"`, `` ` ``, `$` and `\` escaped, `%` doubled, a backslash doubled once more for the file's own escaping). A desktop that lets the person switch the entry off writes `Hidden=true` or `X-GNOME-Autostart-enabled=false`: that is reported as *switched off*, and switching on rewrites the file without it.
+
+**macOS** (compiled and linted, **not tried**): a LaunchAgent property list `io.github.josbrig.usage-cockpit.plist` in `~/Library/LaunchAgents` with `Label`, `ProgramArguments` (the executable) and `RunAtLoad`, XML-escaped. Nothing is started or stopped by writing or removing it (`launchctl bootstrap` would run the agent, that is start the program, at once): it counts from the next login. macOS does not report *switched off* (only whether the file is there; a switch-off in the login items of the system is a launchd override that the file does not show). A path that is not valid text or has a control character is refused for both systems.
+
+The file logic (the texts, the classification and reading, writing and removing the files in a folder that is passed in) is `autostart_files.rs`: it is compiled and tested on every system with temporary folders, so these parts are tested on Windows; only the choice of the folder from the environment (`HOME`, `XDG_CONFIG_HOME`) is system specific. With `USAGE_COCKPIT_HOME` set the entry is called `usage-cockpit-test-home` there.
 
 ### 7.4 Remove everything (`uninstall`)
 

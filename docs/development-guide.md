@@ -206,7 +206,7 @@ cargo test --all
 
 (or `ctest --test-dir build -C Release` after a CMake configure). Fix the cause of a failure; do not weaken a check or an allowed lint to make it pass.
 
-**Checking the other systems without having them.** Code that is only compiled on Linux or macOS (`#[cfg(unix)]`, `#[cfg(not(windows))]`: the quoting for `sh`, the shell for the kept status line, the stub that says the start entry is not available yet) is not compiled by the three commands above on Windows. From any computer you can compile and lint it for the other targets:
+**Checking the other systems without having them.** Code that is only compiled on Linux or macOS (`#[cfg(unix)]`, `#[cfg(not(windows))]`: the quoting for `sh`, the shell for the kept status line, the start entry as a file) is not compiled by the three commands above on Windows. From any computer you can compile and lint it for the other targets:
 
 ```
 rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin

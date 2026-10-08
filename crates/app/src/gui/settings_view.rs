@@ -10,7 +10,7 @@ use cockpit_core::settings::{
 };
 use eframe::egui::{self, Color32, Context, TextEdit, Ui};
 
-use crate::autostart::State as AutostartState;
+use crate::autostart::{LABEL as AUTOSTART_LABEL, SWITCHED_OFF_TEXT, State as AutostartState};
 
 /// What the person did in the dialog.
 #[derive(Debug, PartialEq)]
@@ -246,10 +246,7 @@ fn autostart_row(ui: &mut Ui, draft: &Draft, outcome: &mut Outcome) {
     };
     ui.add_space(4.0);
     let mut on = matches!(state, AutostartState::On | AutostartState::Stale { .. });
-    if ui
-        .checkbox(&mut on, "Start with Windows (when you sign in)")
-        .changed()
-    {
+    if ui.checkbox(&mut on, AUTOSTART_LABEL).changed() {
         *outcome = Outcome::Autostart(on);
     }
     match state {
@@ -259,13 +256,10 @@ fn autostart_row(ui: &mut Ui, draft: &Draft, outcome: &mut Outcome) {
                 *outcome = Outcome::Autostart(true);
             }
         }
-        AutostartState::SwitchedOffInWindows => {
-            ui.colored_label(
-                warning,
-                "Switched off in the Windows list of startup apps. Ticking the box switches it on again.",
-            );
+        AutostartState::SwitchedOff => {
+            ui.colored_label(warning, SWITCHED_OFF_TEXT);
         }
-        AutostartState::On | AutostartState::Off | AutostartState::Unsupported => {}
+        AutostartState::On | AutostartState::Off => {}
     }
 }
 
