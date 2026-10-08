@@ -22,13 +22,13 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-016 No-data state | #44, #55 | – | – | approved |
 | REQ-017 Several sessions | #39 | – | – | approved |
 | REQ-018 Compact window | #47, #53, #65, #66, #67 | – | – | approved |
-| REQ-019 Server-side usage source (decision pending) | – (owner decision #5) | – | – | draft |
+| REQ-019 Account usage source (draft, decisions D1 to D3 of the owner open) | #5, #175 | – | – | draft |
 | REQ-020 Bridge record hand-over | #25, #29, #30 | – | – | approved |
 | REQ-021 Usage rate from the current window | #36 | – | – | approved |
 | REQ-022 Window reset detection | #34 | – | – | approved |
 | REQ-023 Bridge setup and removal | #32, #55, #120 | – | – | approved |
 | REQ-024 Settings | #25, #27, #54 | – | – | approved |
-| REQ-025 History retention | #33, #56 | – | – | approved |
+| REQ-025 History retention | #33, #56 | – | – | approved (amended 2026-10-08, see REQ-121) |
 | REQ-026 Time display | #40 | – | – | approved |
 | REQ-027 Weekly planning | #38, #45, #51 | – | – | approved |
 | REQ-028 Session details | #46, #51 | – | – | approved |
@@ -58,3 +58,5 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-119 Remove everything | #122, #127, #132 | PR #138 | `req_119_*` (uninstall module, window dialog, `tests/uninstall.rs`) | draft |
 | REQ-120 Token use without status line data | #173 | – | `req_120_*` (`tests/viewmodel_fallback.rs`) | draft |
 | REQ-121 Persistent usage database | #191 | – | – | draft |
+| REQ-122 Live view of the whole token use | #191 | – | – | draft |
+| REQ-123 Transfer of the history to another computer | #191 | – | – | draft |

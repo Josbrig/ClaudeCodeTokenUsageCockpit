@@ -107,10 +107,12 @@ Terms used below:
 - Acceptance: The window can be toggled to always-on-top; after a restart it reopens at the previous position and size.
 - Type: functional · Origin: brief · Status: approved
 
-### REQ-019 Server-side usage source (decision pending)
-- Statement: Optionally, the cockpit may obtain usage data from a server-side source when no Claude Code session runs.
-- Acceptance: To be defined after the owner decision on source C.
-- Type: functional · Origin: research (source C) · Status: draft, blocked by owner decision
+### REQ-019 Account usage source (draft, decision of the owner open)
+- Statement: The cockpit shall obtain the 5-hour and 7-day usage percentages and their reset times from the owner's own subscription account by signing in the way Claude Code itself does, so that the percentages are live without a running Claude Code and for every way of working with Claude Code (terminal, VS Code extension, other computers of the same account). The cockpit shall read the values at an interval that the owner can set, shall show their age (REQ-009), and shall fall back to REQ-011 and REQ-120 when the account cannot be reached.
+- Acceptance: On the owner's computer with a Claude Pro subscription and no Claude Code running, the cockpit shows the same percentages as `/usage` of Claude Code within 1 percentage point and updates them at the set interval; after a work session in the VS Code extension the percentages change at the next interval without any terminal session; when the network or the sign-in fails, the rows show the last values marked as stale and say why.
+- Type: functional · Origin: owner statement 2026-10-08 (there is an interface for the data of a Pro subscription when the program signs in the way Claude Code does) · Status: draft, blocked by the owner decisions D1 to D3 below
+- Open decisions of the owner: **D1** how the sign-in is made: use the sign-in token that Claude Code has stored on the computer (works only where Claude Code has signed in, and the cockpit reads the credentials file), or an own sign-in of the cockpit (a login window; needs an application identity that the cockpit does not have). **D2** whether the program may send requests to Anthropic servers (this changes REQ-103) and read a stored sign-in token (this changes REQ-104). **D3** the position on the terms of use: the interface is not documented, and the terms say that third parties may not offer sign-in with the subscription or route requests through subscription credentials; whether only reading one's own usage with one's own sign-in is covered is not clear and is to be checked by the owner before use. The agent has not called the interface.
+- Facts for the decision: [research/data-sources.md](research/data-sources.md), source C (reported by community projects, undocumented, may change or disappear at any time, not verified for this project).
 
 ### REQ-020 Bridge record hand-over
 - Statement: When Claude Code runs the bridge with a record on standard input, the bridge shall store the record for the cockpit in a per-user data directory, written so that a reader never sees a partially written file, and shall then print a status line text and exit.
@@ -138,9 +140,9 @@ Terms used below:
 - Type: functional · Origin: derived · Status: approved
 
 ### REQ-025 History retention
-- Statement: The cockpit shall keep the local history for at least 35 days *(proposal)* and shall remove older records automatically, keeping the data store below 50 MB *(proposal)*.
-- Acceptance: With synthetic records spanning 60 days, records older than 35 days are removed at start-up or within one hour of running; the store stays below the size limit.
-- Type: functional · Origin: derived (REQ-013) · Status: approved
+- Statement: The cockpit shall keep the local history without a time limit and shall delete it only on the owner's action (REQ-121: deletion of everything or of everything older than a chosen date). *(Amended by the owner's decision of 2026-10-08; before: at least 35 days and automatic removal of older records, store below 50 MB.)*
+- Acceptance: With synthetic records spanning 400 days, all records are still there after a restart; the deletion of everything older than a date removes exactly those records and asks for confirmation first.
+- Type: functional · Origin: derived (REQ-013), amended by owner decision 2026-10-08 (issue #191) · Status: approved (amended)
 
 ### REQ-026 Time display
 - Statement: The cockpit shall show reset times in the local time zone of the computer and compute all durations from absolute timestamps, so that daylight-saving changes do not distort durations.
@@ -195,12 +197,12 @@ Terms used below:
 - Type: non-functional (platform) · Origin: brief · Status: approved
 
 ### REQ-103 Local operation
-- Statement: The cockpit shall work fully offline and shall not send any data over the network, except to the server-side source if REQ-019 is approved and enabled.
+- Statement: The cockpit shall work fully offline and shall not send any data over the network, except to the account source of REQ-019 if the owner approves and enables it (then only requests to the servers of Anthropic that REQ-019 needs, no other destination).
 - Acceptance: With network access blocked, all functions based on sources A and B work; a network capture shows no outgoing connections from the cockpit.
 - Type: non-functional (privacy) · Origin: derived · Status: approved
 
 ### REQ-104 Credential handling
-- Statement: The cockpit shall never store, log or display authentication credentials.
+- Statement: The cockpit shall never log or display authentication credentials, and shall not store them in its own files. If REQ-019 is approved with the use of the sign-in token that Claude Code stored, the cockpit reads that token only in memory for the requests of REQ-019 and never copies it (decision D2 of REQ-019).
 - Acceptance: Code review and a log inspection after a full run show no credential values.
 - Type: non-functional (security) · Origin: derived · Status: approved
 
@@ -285,6 +287,17 @@ Terms used below:
 - Type: functional · Origin: owner decision 2026-10-08 · Status: draft
 
 ### REQ-121 Persistent usage database
-- Statement: The cockpit shall store the usage data it has seen (token counts per message with time, model and day, and the status line records with their percentages) in a local database in the per-user data folder, add new data incrementally so that every message is counted once, keep it for a retention that the owner sets, show history from it beyond the current run and beyond the 35 days of REQ-025 and REQ-014, and keep showing it when Claude Code has deleted the transcript files.
-- Acceptance: After the transcripts of an old day are deleted from the Claude Code folder, that day is still shown with its token counts; after a restart the history is shown at once without reading all transcripts again; every message is counted once, also after several starts.
-- Type: functional · Origin: owner request 2026-10-08 (issue #191) · Status: draft (open: retention, form of the database, views, several computers)
+- Statement: The cockpit shall store the usage data it has seen in one local database file (SQLite) in the per-user data folder of the computer on which it runs: the token counts per message (time, model, project, session, the four token kinds) and the status line and account records with their percentages. New data is added incrementally so that every message is counted once. The data is kept without a time limit and removed only on the owner's action (everything, or everything older than a chosen date, after a confirmation that names the amount). The history is shown from the database beyond the current run and beyond 35 days: per hour, day, week and month, per model, project, session and token kind, and further views that the owner asks for. The history stays when Claude Code has deleted its transcript files.
+- Acceptance: After the transcripts of an old day are deleted from the Claude Code folder, the day is still shown with its token counts; after a restart the history is shown at once, without reading all transcripts again; every message is counted once also after several starts and after a repeated scan; the deletion asks first, names the amount and removes only the chosen range, and a later scan does not bring the deleted range back.
+- Type: functional · Origin: owner request 2026-10-08 (issue #191) · Status: draft
+
+### REQ-122 Live view of the whole token use
+- Statement: The cockpit shall show the token use of every Claude Code client on the computer on which it runs (terminal, VS Code extension, other clients that write the transcript files) live: a new answer appears in the numbers and the charts within 2 seconds, also right after the start of the cockpit and of the system, without a running terminal session and without Claude Code needing to call the cockpit. The values come from the transcript files (counts) and are stored by REQ-121.
+- Acceptance: With the cockpit running and an answer in the VS Code extension, the changed token count is in the window within 2 seconds in 10 of 10 tries (time measured from the time stamp of the answer in the transcript file); after the start of the cockpit the history is shown at once and a new answer is added within 2 seconds; idle CPU stays below 1 % and memory below 100 MB (REQ-105).
+- Type: functional · Origin: owner request 2026-10-08 (the whole Claude token use live and in the database) · Status: draft
+- Note: this is the acceptance test of the purpose of the cockpit in the sense of the owner: live in daily work. REQ-010 (display within 2 seconds of a new record) is met by it for the token counts; for the percentages REQ-019 is needed.
+
+### REQ-123 Transfer of the history to another computer
+- Statement: The cockpit should be able to export the stored history of its computer into a file and to import such a file from another computer, so that the whole token use of the owner can be seen in one database; imports never count a message twice, name the computer they come from, and the views can be limited to one computer. The file contains only counts, identifiers, times, model and project names, no message text and no credentials.
+- Acceptance: Export, then import twice into the same database changes nothing the second time; an import from a sample file of another computer adds exactly its messages and labels them with the computer name; a search of an export for sample message text and for credential strings finds none.
+- Type: functional · Origin: owner request 2026-10-08 (desirable) · Status: draft (priority: should)
