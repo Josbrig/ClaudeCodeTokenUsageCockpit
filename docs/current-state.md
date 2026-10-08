@@ -4,7 +4,7 @@ Status of 2026-10-08. This page says plainly what the program does today, what i
 
 ## 1. In one paragraph
 
-The program (`usage-cockpit`) is a small window that shows how much of the 5-hour and the 7-day limit of Claude Code has been used, with pace, forecast and charts. **It is not a live monitor of the account.** It shows live values only while a Claude Code **terminal** session is answering; at any other time it shows the last values it received, marked *stale*, plus token counts that it adds up from the files Claude Code writes on the same computer. This is a consequence of the chosen data source, not a defect of single functions.
+The program (`usage-cockpit`) is a small window that shows how much of the 5-hour and the 7-day limit of Claude Code has been used, with pace, forecast and charts. **It is not a live monitor of the account.** It shows live values only while a Claude Code **terminal** session is answering (the VS Code extension apparently does not feed it); at any other time it shows the last values it received, marked *stale*, plus token counts that it adds up from the files Claude Code writes on the same computer. This is a consequence of the chosen data source, not a defect of single functions.
 
 ## 2. Where the data comes from
 
@@ -31,9 +31,9 @@ The percentages are the only values that tell how near the limit is. Token count
 ## 4. Concept problems
 
 1. **Not live without a terminal session.** The percentages exist only inside a running terminal Claude Code at the moment of an answer. The program cannot ask for them. An autostart of the window therefore shows no live values after the system start; it shows the last ones, stale.
-2. **The VS Code extension does not feed it.** Observed on one computer: all recent sessions ran in the extension and no record arrived after the last terminal session. The official description of the status line is for the terminal client. Whoever works only in the extension gets no percentages.
+2. **The VS Code extension apparently does not feed it.** Observed on one computer: all recent sessions ran in the extension and no record arrived after the last terminal session. The official description of the status line is for the terminal client. Whoever works only in the extension gets no percentages.
 3. **Not autonomous.** The program needs a Claude Code installation with the bridge set up on every computer that is to be watched. It cannot watch other computers by itself.
-4. **No official server-side interface for a Pro account.** The organisation interfaces (usage and cost, Claude Code analytics, enterprise analytics, team export) exist for organisations, not for a Pro subscription. Using the login of a subscription in a third-party program is not permitted by the terms of use. Source C is undocumented and its terms position is unclear. So a Pro account has no official way to read the window percentages without a local Claude Code.
+4. **No official server-side interface for a Pro account.** The organisation interfaces (usage and cost, Claude Code analytics, enterprise analytics, team export) exist for organisations, not for a Pro subscription. According to the terms of use as read by the research agent (not re-checked by hand, no legal advice), using the login of a subscription in a third-party program is not permitted. Source C is undocumented and its terms position is unclear. So a Pro account has no official way to read the window percentages without a local Claude Code.
 5. **Requirements that forbid the alternatives.** REQ-104 (never store, log or display credentials) and REQ-103 (no network traffic except a possible REQ-019) were written for the status line design. A login based source would need an owner decision on both.
 6. **The limit was documented only in part.** The README and the research page state that data arrives only while Claude Code runs and only for Pro and Max. They did not state that the VS Code extension is not served, and the project description listed source C as an open decision of the owner, without spelling out what that means for daily use.
 
@@ -43,12 +43,12 @@ All requirements are in [requirements.md](requirements.md); the link from requir
 
 | Group | Requirements | State |
 |---|---|---|
-| Display of the windows and calculations | REQ-001 to REQ-008, REQ-021, REQ-022, REQ-027 | approved, built, tested; **they need the percentages (source A)** |
+| Display of the windows and calculations | REQ-001 to REQ-008, REQ-021, REQ-022, REQ-027 | approved, built, tested with sample data; **they need the percentages (source A)** |
 | Data age, refresh, no-data state, sessions | REQ-009, REQ-010, REQ-016, REQ-017 | approved, built |
 | Data sources | REQ-011 (status line), REQ-014 and REQ-015 (token statistics, estimate) | approved, built; REQ-019 (server-side source) **blocked, owner decision open** |
-| Bridge and its setup | REQ-012, REQ-020, REQ-023, REQ-109 | approved, built, tried with the real Claude Code terminal client on Windows |
+| Bridge and its setup | REQ-012, REQ-020, REQ-023, REQ-109 | approved, built; tests with sample data in the repo; a hand test with the real terminal client is reported by the author and not recorded in the repo (section 7) |
 | History, settings, logging, windows, charts | REQ-013, REQ-018, REQ-024 to REQ-026, REQ-028 to REQ-033 | approved, built |
-| Technical and quality requirements | REQ-101 to REQ-116 | approved; most built; releases in CI (REQ-111) wait for the CI decision |
+| Technical and quality requirements | REQ-101 to REQ-116 | approved; most built; releases in CI (REQ-111) wait for the CI workflow files, which need the owner's go-ahead (issue #23) |
 | Portable use, start with the system, remove everything | REQ-117 to REQ-119 | **draft** (the owner sets *approved*), built on Windows |
 | Token use without status line data | REQ-120 | **draft**, built (text in the row only, no chart) |
 
@@ -68,8 +68,8 @@ Details: [user-guide.md](user-guide.md).
 
 | Statement | Basis |
 |---|---|
-| The bridge records percentages with the real Claude Code terminal client (versions 2.1.288 and 2.1.293), values equal to `/usage` | tried by hand on Windows, 2026-10-07 |
-| A non-interactive run (`claude -p`) does not call the status line | tried, one run |
+| The bridge records percentages with the real Claude Code terminal client, values equal to `/usage` | hand test of the author on Windows, 2026-10-07 (versions 2.1.288 and 2.1.293); **not recorded in the repo**, to be repeated and written down |
+| A non-interactive run (`claude -p`) does not call the status line | one hand run on 2026-10-08; **not recorded in the repo** |
 | The VS Code extension does not call the status line | observed on one computer; the official description is for the terminal; not tested in a controlled way |
 | No official interface returns the window percentages for a Pro account | read from the official documentation by a research agent (list in issue #175); not re-checked by hand |
 | Linux and macOS | compiled and linted from Windows only; never run |
