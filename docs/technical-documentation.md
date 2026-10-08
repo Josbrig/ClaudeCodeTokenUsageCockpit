@@ -277,6 +277,8 @@ cargo test --all
 
 ## 11. Where to start when changing something
 
+The step-by-step way of making and handing in a change, with two worked examples, is in the [development guide](development-guide.md); this table only says where things are.
+
 | I want to … | Look at |
 |---|---|
 | change a displayed text or number format | `cockpit-core::format`, then `viewmodel` (the texts are tested there) |

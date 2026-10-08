@@ -2,6 +2,10 @@
 
 Thank you for your interest. The project is in its concept phase; the way work is organised is described below.
 
+## Getting started
+
+How to set up the tools, build, test and change the program by hand is in the [development guide](docs/development-guide.md).
+
 ## Issues
 
 - Use one of the issue forms. Blank issues are disabled.
