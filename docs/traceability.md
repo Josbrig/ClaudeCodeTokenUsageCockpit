@@ -39,7 +39,7 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-033 Single instance | #48 | – | – | approved |
 | REQ-101 Single executable | #57, #65, #66, #67, #154 | – | – | approved |
 | REQ-102 Target platforms | #23, #47, #57, #65, #66, #67, #154 | – | – | approved |
-| REQ-103 Local operation | #62 | – | – | approved |
+| REQ-103 Network use only for the owner's purpose | #62, #175 | – | – | approved (amended 2026-10-08) |
 | REQ-104 Credential handling | #60 | – | – | approved |
 | REQ-105 Resource usage | #42, #49, #61, #69 | – | – | approved |
 | REQ-106 Readability at a glance | #68 | – | – | approved |
