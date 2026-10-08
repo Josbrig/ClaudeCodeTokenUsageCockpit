@@ -54,6 +54,6 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-115 Data format versioning | #27, #29 | – | – | approved |
 | REQ-116 Start-up time | #61, #69 | – | – | approved |
 | REQ-117 Portable use | #120, #123, #125, #130 | – | – | draft |
-| REQ-118 Optional start with the system | #121, #126, #131 | PR #137 | `req_118_*` (autostart module) | draft |
+| REQ-118 Optional start with the system | #121, #126, #131, #181 | PR #137 | `req_118_*` (autostart module, kept for the removal of old entries) | rejected |
 | REQ-119 Remove everything | #122, #127, #132 | PR #138 | `req_119_*` (uninstall module, window dialog, `tests/uninstall.rs`) | draft |
 | REQ-120 Token use without status line data | #173 | – | `req_120_*` (`tests/viewmodel_fallback.rs`) | draft |

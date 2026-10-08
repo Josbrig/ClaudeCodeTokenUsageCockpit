@@ -10,8 +10,6 @@ const ROOT: &str = env!("CARGO_MANIFEST_DIR");
 /// The calls whose first or last string literal is a text the person reads.
 const PATTERNS: &[&str] = &[
     "pub const LABEL: &str = \"",
-    // a constant whose text starts on the next line: the pattern ends at the `=`
-    "pub const SWITCHED_OFF_TEXT: &str =",
     "ui.button(\"",
     "Button::new(\"",
     "heading(ui, \"",

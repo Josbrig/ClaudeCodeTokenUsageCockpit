@@ -272,7 +272,7 @@ Terms used below:
 ### REQ-118 Optional start with the system
 - Statement: The cockpit shall offer a switch in its settings to start with the user's sign-in (desktop session), which is off by default, needs no administrator rights, can be switched off again, and shows the real state of the system entry (including a "switched off" mark that the user set in the system's list of startup apps).
 - Acceptance: Switching on creates exactly one per-user start entry for the current executable path (and clears the cockpit's own "switched off" mark of the system, if there is one), switching off removes the entry and that mark, and the first start never creates it by itself.
-- Type: functional · Origin: owner decision 2026-10-07 · Status: draft
+- Type: functional · Origin: owner decision 2026-10-07 · Status: rejected (owner decision 2026-10-08: the switch suggests live values after a system start that the data source cannot give; removed with issue #181)
 
 ### REQ-119 Remove everything
 - Statement: The cockpit shall offer a function (window and command line) that undoes everything it created outside its own executable: the bridge entry in the Claude Code settings (with backup), the start entry of REQ-118 and, on the user's explicit choice, its data and configuration folders; it names the backups that stay, and the executable can then be deleted by hand.

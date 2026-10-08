@@ -49,7 +49,8 @@ All requirements are in [requirements.md](requirements.md); the link from requir
 | Bridge and its setup | REQ-012, REQ-020, REQ-023, REQ-109 | approved, built; tests with sample data in the repo; a hand test with the real terminal client is reported by the author and not recorded in the repo (section 7) |
 | History, settings, logging, windows, charts | REQ-013, REQ-018, REQ-024 to REQ-026, REQ-028 to REQ-033 | approved, built |
 | Technical and quality requirements | REQ-101 to REQ-116 | approved; most built; releases in CI (REQ-111) wait for the CI workflow files, which need the owner's go-ahead (issue #23) |
-| Portable use, start with the system, remove everything | REQ-117 to REQ-119 | **draft** (the owner sets *approved*), built on Windows |
+| Portable use, remove everything | REQ-117, REQ-119 | **draft** (the owner sets *approved*), built on Windows |
+| Start with the system | REQ-118 | **rejected** (owner decision 2026-10-08), switch removed; *Remove everything* still removes an old entry |
 | Token use without status line data | REQ-120 | **draft**, built (text in the row only, no chart) |
 
 Only the owner changes an approved requirement. The concept problems above concern REQ-011, REQ-017, REQ-019, REQ-103 and REQ-104.
@@ -59,8 +60,7 @@ Only the owner changes an approved requirement. The concept problems above conce
 1. Start `usage-cockpit.exe` (portable; any folder). In the window press *Set up bridge* and confirm. This is the only change to your Claude Code settings; *Remove bridge* undoes it.
 2. Open **Claude Code in a terminal** (in VS Code: *Terminal*, *New Terminal*, then `claude`) and send a message. After its answer the rows show the percentages and the charts fill.
 3. Keep working in the terminal if you want live values. In the extension alone the percentages stand still.
-4. Optional: *Start with Windows* in the settings shows the window after the system start. It then shows the last values (stale) until a terminal session answers.
-5. The detailed view (key `D`) shows token statistics per day and per model with charts, from the local files; they work at any time.
+4. The detailed view (key `D`) shows token statistics per day and per model with charts, from the local files; they work at any time.
 
 Details: [user-guide.md](user-guide.md).
 

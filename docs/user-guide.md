@@ -57,7 +57,7 @@ The *bridge* is explained in [section 4](#4-connecting-it-to-claude-code); here 
 - **Windows:** a space in the path is handled (the setup writes the old-style short name of the folder, such as `MYTOOL~1`, which has no space, or quotes the path).
 - **Linux and macOS** (not tried yet): a path with a space or another special character is quoted for the shell (`sh`) that Claude Code uses.
 
-If you move the program later, set the bridge up again from its new place (*Set up bridge* replaces the old entry), and, if you use the start entry ([section 4.3](#43-start-with-the-system)), press *Use this file* in the settings.
+If you move the program later, set the bridge up again from its new place (*Set up bridge* replaces the old entry).
 
 ### 3.3 First start
 
@@ -69,7 +69,7 @@ The compact window (about 320 by 120 pixels) opens and stays on top. Only one co
 
 ### 3.4 What the program changes on your computer
 
-Until you ask, **nothing outside its own file and two folders**. At the first start it creates its data folder (a log and a lock file) and, when you move or close the window, a settings file in its configuration folder ([section 8](#8-where-your-data-is)). It changes the Claude Code settings only when you press *Set up bridge* (or *Remove bridge*, *Remove everything*), after showing you what will change. It creates a start entry of the system only when you tick the box for it ([section 4.3](#43-start-with-the-system)).
+Until you ask, **nothing outside its own file and two folders**. At the first start it creates its data folder (a log and a lock file) and, when you move or close the window, a settings file in its configuration folder ([section 8](#8-where-your-data-is)). It changes the Claude Code settings only when you press *Set up bridge* (or *Remove bridge*, *Remove everything*), after showing you what will change.
 
 ### 3.5 Check that it works
 
@@ -99,18 +99,9 @@ Press **Remove bridge** at the bottom of the detailed view, or run `usage-cockpi
 
 ### 4.3 Start with the system
 
-A box in the settings dialog makes the system start the cockpit when you sign in. Its text depends on the system: **Start with Windows (when you sign in)** on Windows, **Start with the desktop session (when you log in)** on Linux and **Start at login** on macOS. In this guide the box is called *Start with Windows* (Windows) or *the start entry* (every system).
+**No longer offered.** Earlier versions had a box in the settings dialog that made the system start the cockpit at sign-in: **Start with Windows (when you sign in)** on Windows, **Start with the desktop session (when you log in)** on Linux and **Start at login** on macOS. It was removed on 2026-10-08: a window started with the system has no live values to show until Claude Code in a terminal answers ([section 1](#1-quick-start)), so the box suggested something the program cannot do.
 
-- It acts at once and does not wait for *Save*, because it is an entry of the system and not part of the settings file.
-- It is **off by default** and the program never switches it on by itself. It needs no administrator rights. Unticking the box removes the entry again.
-- **Windows** (tried): one value `UsageCockpit` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`. When the box switches the entry on or off it also removes the cockpit's own mark under `...\Explorer\StartupApproved\Run` (where Windows keeps "switched off in the list of startup apps"); nothing else in the registry is touched.
-- **Linux** (compiled, not tried): a desktop entry `usage-cockpit.desktop` in the autostart folder of your desktop (`$XDG_CONFIG_HOME/autostart`, usually `~/.config/autostart`), which common desktops start at sign-in.
-- **macOS** (compiled, not tried): a LaunchAgent file `io.github.josbrig.usage-cockpit.plist` in `~/Library/LaunchAgents`, which macOS loads at the next login. Nothing is started or stopped when the box is ticked, so the entry counts from the next login. A path of the program with a character that cannot be written into the file (not valid text, a control character) is refused with a message.
-
-The box shows what the system really has:
-
-- If the entry starts **another file** (you moved the program), the dialog says *The entry starts another file* and shows which; the button *Use this file* corrects it.
-- If you switched the entry off in the startup list of the system, the dialog says so and that ticking the box switches it on again: on Windows *Switched off in the Windows list of startup apps. Ticking the box switches it on again.*, on Linux *Switched off in the startup applications of your desktop. Ticking the box switches it on again.* (macOS does not report this: the program only knows whether the file is there; if you switched the entry off in the login items of the system, that stays in effect until you switch it on there.)
+If you had ticked it in an earlier version, the entry is still there. *Remove everything* ([section 7](#7-removing-everything-again)) finds and removes it. By hand: on Windows delete the value `UsageCockpit` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` (or switch it off in *Task Manager*, *Startup apps*); on Linux delete `usage-cockpit.desktop` in `~/.config/autostart`; on macOS delete `io.github.josbrig.usage-cockpit.plist` in `~/Library/LaunchAgents`.
 
 ## 5. Using the window
 
@@ -158,7 +149,7 @@ The small button, or the key `D`, shows the detailed view (about 520 by 640 pixe
 | Always on top | on / off | on | Keep the window above other windows. |
 | Start view | Compact / Detailed | Compact | Which view opens at start. |
 
-A value outside its range is not accepted: the dialog says which and what the range is, and *Save* stays disabled until it is fixed. *Save* writes `settings.toml` and counts at once (it also switches to the view you chose as *Start view*); *Cancel* changes nothing. A single value of the file that is missing or out of range falls back to its default, while the other values are kept. The dialog also has the box for the start entry ([section 4.3](#43-start-with-the-system); on Windows *Start with Windows*), which does not wait for *Save*.
+A value outside its range is not accepted: the dialog says which and what the range is, and *Save* stays disabled until it is fixed. *Save* writes `settings.toml` and counts at once (it also switches to the view you chose as *Start view*); *Cancel* changes nothing. A single value of the file that is missing or out of range falls back to its default, while the other values are kept.
 
 ### 5.5 The charts
 
@@ -238,7 +229,7 @@ The program installs nothing, so removing it is deleting its file. Before you do
 
 1. **Press *Remove everything*** at the bottom of the detailed view (or run `usage-cockpit uninstall`, with `--yes` on Windows). A dialog lists what will happen before it happens, and nothing is changed until you press its own button **Remove everything** (**Cancel** closes it without changing anything):
    - the bridge is removed from the Claude Code settings (a backup is made first, your previous status line comes back);
-   - the start entry of the system is removed, if you had switched the start entry on (*Start with Windows* on Windows);
+   - the start entry of the system is removed, if an earlier version made one ([section 4.3](#43-start-with-the-system));
    - **only if you tick the box** *Also delete the history, logs and settings* (unticked at first, so the history is kept by default): the data and configuration folders from [section 8](#8-where-your-data-is) are deleted. The history is lost then. On the command line this is the option `--remove-data`; if a cockpit window is open it keeps the data and says so.
 2. **Read the result and press OK.** The cockpit closes itself. If you chose to delete the data, a small hidden helper of the same program (started when you pressed *Remove everything*) waits until the window has closed and then deletes the folders; it deletes nothing if the window is still open after five minutes or if the bridge is still set up. It has no window and cannot report problems: if a folder of the table in section 8 is still there after a minute, delete it by hand.
 3. **Delete the program file by hand.** The program cannot delete itself.
@@ -247,7 +238,7 @@ The program installs nothing, so removing it is deleting its file. Before you do
 
 What stays: the copies of your Claude Code settings (`settings.json.usage-cockpit-backup-*`) next to `settings.json`, and any file in the data or configuration folder that the cockpit did not create (the folders are cleaned file by file and only removed when they are empty). If something in the list could not be done, the cockpit stays open and says what failed (it does not close, so you can read it); the history and settings are then kept, because the stored status line is needed to put your old one back.
 
-By hand, the same is: remove the bridge ([section 4.2](#42-remove-the-bridge-only)), untick the start entry (*Start with Windows* on Windows), close the cockpit, delete the folders of section 8, delete the program file.
+By hand, the same is: remove the bridge ([section 4.2](#42-remove-the-bridge-only)), remove a start entry of an earlier version ([section 4.3](#43-start-with-the-system)), close the cockpit, delete the folders of section 8, delete the program file.
 
 ## 8. Where your data is
 
@@ -300,8 +291,6 @@ The program also *reads* the transcript files of Claude Code (`projects/**/*.jso
 - **The bridge does not seem to run.** Open the detailed view and press **Set up bridge**: it says if the bridge is already set up. Check that no project of yours has its own `statusLine`, and that the program path is the one in the Claude Code settings. If you moved the program, set the bridge up again.
 - **Claude Code shows my old status line only.** That is what the *kept* status line is for: the bridge runs it and shows its output. The cockpit still receives the data. If the old command fails or takes longer than a second, the bridge shows its own text.
 - **The window is gone or outside the screen.** Close the cockpit, open `settings.toml` in the configuration folder, and delete the `[window]` section (or set `x` and `y` to small positive numbers), then start it again. The window then opens at its default place and at the default size of the compact view; press `D` for the detailed view.
-- **The box for the start entry (*Start with Windows*) says the entry starts another file.** You moved the program. Press *Use this file*.
-- **I ticked *Start with Windows*, but the program does not start.** Look at the box: if it says the entry is switched off in the Windows list of startup apps, tick it again (or switch it on in *Task Manager*, *Startup apps*). On Linux look at the startup applications of your desktop, on macOS the login items; on macOS the entry only counts from the next login.
 - **After *Remove everything* a folder is still there.** The helper that deletes the data has no window and may have found a file still in use. Delete the folder by hand (the places are in [section 8](#8-where-your-data-is)). Before you delete the *configuration* folder, make sure the bridge is removed from the Claude Code settings: that folder holds your previous status line.
 - **Settings are reset.** An invalid `settings.toml` is renamed to `settings.toml.invalid` and the defaults are used.
 - **The numbers of the transcripts look too small.** Only this computer and only the last 35 days are counted.
