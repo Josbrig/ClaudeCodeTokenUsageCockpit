@@ -364,7 +364,8 @@ pub fn wait_for_exit(pid: u32) -> bool {
 }
 
 /// Linux and macOS: asks `kill -0` (no signal is sent, it only tells whether the process is
-/// there) every 200 ms, for at most five minutes. A process that is a zombie (its parent has not
+/// there) every 200 ms, for at most five minutes. If `kill` cannot be run, the answer stays "not
+/// yet" and the wait ends with `false`, so nothing is deleted. A process that is a zombie (its parent has not
 /// collected it) still counts as there; that happens only if the program was started from a
 /// parent that does not wait for its children.
 #[cfg(not(windows))]
@@ -373,15 +374,20 @@ pub fn wait_for_exit(pid: u32) -> bool {
 
     wait_until(
         || {
-            // `kill -0` succeeds while the process exists; a failure to run `kill` counts as gone
-            !Command::new("kill")
+            // `kill -0` succeeds while the process exists and fails once it is gone. If `kill`
+            // cannot be run at all, nothing is known: that is not "gone", because the helper
+            // deletes files and must not do that under a window that may still run.
+            match Command::new("kill")
                 .arg("-0")
                 .arg(pid.to_string())
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()
-                .is_ok_and(|status| status.success())
+            {
+                Ok(status) => !status.success(),
+                Err(_) => false,
+            }
         },
         Duration::from_secs(5 * 60),
         Duration::from_millis(200),
@@ -710,7 +716,9 @@ mod tests {
     #[test]
     fn req_127_data_and_configuration_in_one_folder_are_cleaned_once() {
         let root = tempfile::tempdir().unwrap();
-        let shared = root.path().join("usage-cockpit");
+        // like macOS: ".../Application Support/usage-cockpit" (the parent must stay)
+        let parent = root.path().join("Application Support");
+        let shared = parent.join("usage-cockpit");
         fs::create_dir_all(&shared).unwrap();
         for name in [
             "latest.json",
@@ -731,6 +739,10 @@ mod tests {
         let report = run(&loc, Data::Delete, true);
         assert!(!report.failed, "{report:?}");
         assert!(!shared.exists(), "{report:?}");
+        assert!(
+            parent.exists(),
+            "the folder above the shared one is not ours"
+        );
         let text = report.text();
         assert!(!text.contains("did not create"), "{text}");
         assert_eq!(text.matches("Deleted").count(), 1, "{text}");
