@@ -25,7 +25,7 @@ The full manual: [user-guide.md](user-guide.md). Where the program stands and wh
 
 ## What is in it
 
-See the [changelog](../CHANGELOG.md). Requirements and their state: [requirements.md](requirements.md); three of them (portable use, token use without status line data, remove everything) are still *draft*, one (the start with the system) was rejected and the switch was removed.
+See the [changelog](../CHANGELOG.md). Requirements and their state: [requirements.md](requirements.md); some are still *draft*: portable use (REQ-117), remove everything (REQ-119), token use without status line data (REQ-120) and the server-side source (REQ-019, blocked by an open decision of the owner); the start with the system (REQ-118) was rejected and its switch was removed.
 
 ## Checks behind this release
 
