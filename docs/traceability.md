@@ -22,7 +22,7 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-016 No-data state | #44, #55 | – | – | approved |
 | REQ-017 Several sessions | #39 | – | – | approved |
 | REQ-018 Compact window | #47, #53, #65, #66, #67 | – | – | approved |
-| REQ-019 Account usage source (draft, decisions D1 to D3 of the owner open) | #5, #175 | – | – | draft |
+| REQ-019 Account usage source (stored token only, D3 terms position is the owner's) | #5, #175 | – | – | draft |
 | REQ-020 Bridge record hand-over | #25, #29, #30 | – | – | approved |
 | REQ-021 Usage rate from the current window | #36 | – | – | approved |
 | REQ-022 Window reset detection | #34 | – | – | approved |
