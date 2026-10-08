@@ -7,18 +7,23 @@
 #   sh scripts/setup-dev-linux.sh --check    # report only, installs nothing
 #   sh scripts/setup-dev-linux.sh            # report, ask, install what is missing, build once
 #
-# Needed: Rust (the toolchain pinned in rust-toolchain.toml, with rustfmt and clippy) through
-# rustup, a C compiler and linker, pkg-config, Git, curl, CMake and Ninja (for the CMake builds)
-# and the development packages of the window toolkit (X11 and Wayland, xkbcommon, OpenGL).
+# What is needed:
+#   - to build: Rust (the toolchain pinned in rust-toolchain.toml, with rustfmt and clippy)
+#     through rustup, and a C compiler and linker (`cc`). The window libraries are loaded when the
+#     program runs (dlopen), so no development packages are needed to build it.
+#   - to run the window: the libraries of X11, Wayland, xkbcommon and OpenGL/EGL (checked through
+#     `ldconfig -p`; a desktop normally has them, a minimal server image does not).
+#   - Git, CMake and Ninja (for the CMake builds), and curl (only to install rustup).
 #
 # Debian, Ubuntu and Raspberry Pi OS (apt): the missing packages are installed with `sudo
-# apt-get install`; sudo is used for that step only, and the script says so before it asks. Other
-# families (Fedora, Arch, openSUSE): the script checks, lists the missing things with the package
-# names, installs only rustup and the toolchain (they need no root rights) and stops with exit
-# code 3 if system packages are missing.
+# apt-get install`; sudo is used for that step only, and the plan says so before it asks. Other
+# families (Fedora, Arch, openSUSE), or no root rights and no sudo: the script lists the package
+# names, installs only rustup and the toolchain (no root rights needed) and exits with code 3 if
+# system packages are still missing.
 #
-# It installs only what is missing and can be run again. It contains no secrets and changes
-# nothing outside the places of the tools. Options and exit codes: see --help.
+# It installs only what is missing and can be run again. It contains no secrets. The official
+# rustup installer adds ~/.cargo/bin to the PATH in your shell profile; nothing else outside the
+# places of the tools is changed. Options and exit codes: see --help.
 
 set -u
 
@@ -27,18 +32,38 @@ REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 # shellcheck source=lib/setup-dev-common.sh
 . "$SCRIPT_DIR/lib/setup-dev-common.sh"
 
-# The libraries of the window toolkit, as pkg-config knows them: "module:apt package".
-LIBRARIES="xkbcommon:libxkbcommon-dev wayland-client:libwayland-dev x11:libx11-dev xcursor:libxcursor-dev xi:libxi-dev xrandr:libxrandr-dev gl:libgl1-mesa-dev"
+# The libraries that the window loads when it runs: "soname apt-package".
+RUNTIME_LIBS='libxkbcommon.so.0 libxkbcommon0
+libxkbcommon-x11.so.0 libxkbcommon-x11-0
+libwayland-client.so.0 libwayland-client0
+libX11.so.6 libx11-6
+libXcursor.so.1 libxcursor1
+libXi.so.6 libxi6
+libXrandr.so.2 libxrandr2
+libxcb.so.1 libxcb1
+libGL.so.1 libgl1
+libEGL.so.1 libegl1'
 
-# The packages for the other families, only printed.
-OTHER_FAMILIES='Fedora:  sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cmake ninja-build git curl libxkbcommon-devel wayland-devel libX11-devel libXcursor-devel libXi-devel libXrandr-devel mesa-libGL-devel
-Arch:    sudo pacman -S base-devel pkgconf cmake ninja git curl libxkbcommon wayland libx11 libxcursor libxi libxrandr mesa
-openSUSE: sudo zypper install gcc gcc-c++ make pkg-config cmake ninja git curl libxkbcommon-devel wayland-devel libX11-devel libXcursor-devel libXi-devel libXrandr-devel Mesa-libGL-devel'
+# The package names for the other families, only printed.
+OTHER_FAMILIES='Fedora:   sudo dnf install gcc make cmake ninja-build git curl libxkbcommon libxkbcommon-x11 libwayland-client libX11 libXcursor libXi libXrandr libxcb mesa-libGL mesa-libEGL
+Arch:     sudo pacman -S base-devel cmake ninja git curl libxkbcommon libxkbcommon-x11 wayland libx11 libxcursor libxi libxrandr libxcb libglvnd
+openSUSE: sudo zypper install gcc make cmake ninja git curl libxkbcommon0 libxkbcommon-x11-0 libwayland-client0 libX11-6 libXcursor1 libXi6 libXrandr2 libxcb1 Mesa-libGL1 Mesa-libEGL1'
 
 APT_PACKAGES=""
 
 add_apt_package() {
     case " $APT_PACKAGES " in *" $1 "*) ;; *) APT_PACKAGES="$APT_PACKAGES $1" ;; esac
+}
+
+# ldconfig lives in /sbin or /usr/sbin, which a normal user's PATH often lacks.
+find_ldconfig() {
+    for candidate in ldconfig /sbin/ldconfig /usr/sbin/ldconfig; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            command -v "$candidate"
+            return 0
+        fi
+    done
+    return 1
 }
 
 check_tools() {
@@ -47,31 +72,40 @@ check_tools() {
     state_program rustup rustup rustup 'install with the official installer (curl | sh), without a default toolchain'
     state_toolchain "$channel"
     state_program cc cc 'C compiler (cc)' 'apt: build-essential'
-    state_program pkgconfig pkg-config pkg-config 'apt: pkg-config'
     state_program git git Git 'apt: git'
-    state_program curl curl curl 'apt: curl'
     state_program cmake cmake CMake 'apt: cmake'
     state_program ninja ninja Ninja 'apt: ninja-build'
     is_missing cc && add_apt_package build-essential
-    is_missing pkgconfig && add_apt_package pkg-config
     is_missing git && add_apt_package git
-    is_missing curl && add_apt_package curl
     is_missing cmake && add_apt_package cmake
     is_missing ninja && add_apt_package ninja-build
-    if have pkg-config; then
-        for entry in $LIBRARIES; do
-            module=${entry%%:*}
-            package=${entry#*:}
-            if pkg-config --exists "$module" 2>/dev/null; then
-                state "lib-$module" "library $module" 1 "$(pkg-config --modversion "$module" 2>/dev/null)"
-            else
-                state "lib-$module" "library $module" 0 "apt: $package"
-                add_apt_package "$package"
-            fi
+    # curl is only needed to install rustup
+    if is_missing rustup; then
+        state_program curl curl 'curl (to install rustup)' 'apt: curl'
+        is_missing curl && add_apt_package curl
+    fi
+    if ldconfig_path=$(find_ldconfig); then
+        ldconfig_list=$("$ldconfig_path" -p 2>/dev/null || true)
+        old_ifs=$IFS
+        IFS='
+'
+        for entry in $RUNTIME_LIBS; do
+            IFS=$old_ifs
+            soname=${entry%% *}
+            package=${entry#* }
+            case "$ldconfig_list" in
+                *"$soname ("*) state "lib-$soname" "library $soname" 1 'found' ;;
+                *)
+                    state "lib-$soname" "library $soname" 0 "apt: $package"
+                    add_apt_package "$package"
+                    ;;
+            esac
+            IFS='
+'
         done
+        IFS=$old_ifs
     else
-        state libraries 'window libraries' 0 'cannot be checked without pkg-config'
-        for entry in $LIBRARIES; do add_apt_package "${entry#*:}"; done
+        state libraries 'window libraries' 1 'not checked (ldconfig was not found)'
     fi
 }
 
@@ -79,17 +113,33 @@ system_missing() {
     [ -n "$APT_PACKAGES" ]
 }
 
+# Can this script install system packages here: apt-get, and root rights or sudo.
+apt_usable() {
+    have apt-get && { [ "$(id -u)" = 0 ] || have sudo; }
+}
+
 install_system_packages() {
     echo
     echo "The system packages need administrator rights: this step runs 'sudo apt-get install'."
     if [ "$(id -u)" = 0 ]; then
-        apt-get update && apt-get install -y $APT_PACKAGES
-    elif have sudo; then
-        sudo apt-get update && sudo apt-get install -y $APT_PACKAGES
+        apt-get update || echo 'apt-get update failed; trying the installation anyway.'
+        # shellcheck disable=SC2086 # the names are a fixed list without glob characters
+        apt-get install -y $APT_PACKAGES
     else
-        echo 'Neither root rights nor sudo: install these packages by hand:' >&2
-        echo "  apt-get install$APT_PACKAGES" >&2
-        return 1
+        sudo apt-get update || echo 'apt-get update failed; trying the installation anyway.'
+        # shellcheck disable=SC2086 # the names are a fixed list without glob characters
+        sudo apt-get install -y $APT_PACKAGES
+    fi
+}
+
+print_other_families() {
+    echo
+    if have apt-get; then
+        echo 'apt-get is there, but neither root rights nor sudo: install these packages as administrator:'
+        echo "  apt-get install$APT_PACKAGES"
+    else
+        echo 'This script installs system packages only with apt. Install them with your package manager (names for the common families):'
+        printf '%s\n' "$OTHER_FAMILIES"
     fi
 }
 
@@ -106,20 +156,18 @@ main() {
     else
         echo
         echo "$MISSING_COUNT missing."
+        if system_missing && ! apt_usable; then
+            print_other_families
+        fi
         if [ "$CHECK_ONLY" = 1 ]; then
+            echo
             echo 'Nothing was installed (--check). Run without --check to install.'
             exit 1
-        fi
-        if system_missing && ! have apt-get; then
-            echo 'The system packages that are missing cannot be installed by this script on this system.'
-            echo 'Install them with your package manager (names for the common families):'
-            printf '%s\n' "$OTHER_FAMILIES"
-            echo 'Rust itself can still be installed by this script (it needs no root rights).'
         fi
         installable=0
         is_missing rustup && installable=1
         is_missing toolchain && installable=1
-        have apt-get && system_missing && installable=1
+        system_missing && apt_usable && installable=1
         if [ "$installable" = 0 ]; then
             echo
             echo 'There is nothing in the list that this script can install here; install the system packages above by hand and run it again.'
@@ -129,11 +177,11 @@ main() {
         echo 'This would be installed:'
         is_missing rustup && echo '  - rustup (official installer, without a default toolchain)'
         { is_missing rustup || is_missing toolchain; } && echo "  - the Rust toolchain ${channel:-stable} with rustfmt and clippy"
-        if have apt-get && system_missing; then
-            echo "  - system packages with apt (sudo):$APT_PACKAGES"
+        if system_missing && apt_usable; then
+            echo "  - system packages with apt (needs sudo):$APT_PACKAGES"
         fi
         confirm 'Install the missing tools?' || { echo 'Nothing was installed.'; exit 1; }
-        if have apt-get && system_missing; then
+        if system_missing && apt_usable; then
             install_system_packages || exit 2
         fi
         if is_missing rustup; then
@@ -144,7 +192,7 @@ main() {
         fi
         echo
         echo 'Done. Open a new terminal so that the PATH of the new tools is in effect.'
-        if system_missing && ! have apt-get; then
+        if system_missing && ! apt_usable; then
             echo 'The system packages above are still missing.'
             exit 3
         fi
@@ -156,7 +204,4 @@ main() {
     exit 0
 }
 
-# Run only when the script is started, not when the tests read it with `.`.
-case "${0##*/}" in
-    setup-dev-linux.sh) main "$@" ;;
-esac
+main "$@"

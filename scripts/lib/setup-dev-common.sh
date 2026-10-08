@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# shellcheck shell=sh disable=SC2034
 #
 # Helpers of setup-dev-linux.sh and setup-dev-macos.sh. This file is read with `.` by those
 # scripts (it is not run on its own) and by the tests. POSIX sh only: no bash features.
@@ -22,7 +23,7 @@ MISSING_COUNT=0
 
 usage() {
     cat <<'EOF'
-Usage: setup-dev-SYSTEM.sh [--check] [--yes] [--skip-build]
+Usage: setup-dev-SYSTEM.sh [--check] [--yes | -y] [--skip-build]
 
   --check       report what is there and what is missing; install nothing
   --yes         install what is missing without asking
@@ -149,8 +150,20 @@ confirm() {
 # rustup without a default toolchain; the pinned one is installed after.
 install_rustup() {
     have curl || { echo 'curl is needed to install rustup.' >&2; return 1; }
-    echo 'Installing rustup (https://rustup.rs) without a default toolchain ...'
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+    # Downloaded to a file first: in a pipe (curl | sh) a failed download would run an empty script
+    # and look like a success.
+    rustup_script=$(mktemp 2>/dev/null) || rustup_script="${TMPDIR:-/tmp}/rustup-init.$$.sh"
+    echo 'Downloading the rustup installer (https://sh.rustup.rs) ...'
+    if ! curl --proto '=https' --tlsv1.2 -sSf -o "$rustup_script" https://sh.rustup.rs; then
+        echo 'The rustup installer could not be downloaded.' >&2
+        rm -f "$rustup_script"
+        return 1
+    fi
+    echo 'Running it, without a default toolchain ...'
+    sh "$rustup_script" -y --default-toolchain none --profile minimal
+    rustup_status=$?
+    rm -f "$rustup_script"
+    return $rustup_status
 }
 
 install_toolchain() {
