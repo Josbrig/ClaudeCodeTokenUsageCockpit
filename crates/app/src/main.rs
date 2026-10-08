@@ -2,6 +2,8 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod autostart;
+#[cfg_attr(windows, allow(dead_code))]
+mod autostart_files;
 mod bridge;
 mod cli;
 mod commands;

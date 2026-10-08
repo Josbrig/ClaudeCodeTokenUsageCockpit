@@ -510,7 +510,6 @@ fn new_draft(settings: &Settings) -> settings_view::Draft {
         .map_err(|error| format!("cannot determine the executable path: {error}"))
         .and_then(|exe| autostart::state(&exe))
     {
-        Ok(autostart::State::Unsupported) => {}
         Ok(state) => draft.autostart = Some(state),
         Err(message) => draft.autostart_error = Some(message),
     }

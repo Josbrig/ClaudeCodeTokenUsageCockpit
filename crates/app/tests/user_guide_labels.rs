@@ -9,6 +9,9 @@ const ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
 /// The calls whose first or last string literal is a text the person reads.
 const PATTERNS: &[&str] = &[
+    "pub const LABEL: &str = \"",
+    // a constant whose text starts on the next line: the pattern ends at the `=`
+    "pub const SWITCHED_OFF_TEXT: &str =",
     "ui.button(\"",
     "Button::new(\"",
     "heading(ui, \"",
@@ -36,18 +39,28 @@ fn literal_after(source: &str, start: usize) -> Option<String> {
 fn labels() -> Vec<(String, String)> {
     let mut found = Vec::new();
     let folder = format!("{ROOT}/src/gui");
-    for entry in fs::read_dir(&folder).expect("src/gui can be read") {
-        let path = entry.expect("entry").path();
-        if path.extension().is_none_or(|e| e != "rs") {
-            continue;
-        }
+    let mut files: Vec<std::path::PathBuf> = fs::read_dir(&folder)
+        .expect("src/gui can be read")
+        .map(|entry| entry.expect("entry").path())
+        .filter(|path| path.extension().is_some_and(|e| e == "rs"))
+        .collect();
+    // the texts of the start entry (box and "switched off" note) are constants of this file
+    files.push(std::path::PathBuf::from(format!("{ROOT}/src/autostart.rs")));
+    for path in files {
         let source = fs::read_to_string(&path).expect("source can be read");
         // Only the code, not the tests at the end of the file.
         let code = source.split("#[cfg(test)]").next().unwrap_or_default();
         for pattern in PATTERNS {
             let mut from = 0;
             while let Some(at) = code[from..].find(pattern) {
-                let begin = from + at + pattern.len();
+                let mut begin = from + at + pattern.len();
+                if pattern.ends_with('=') {
+                    // the literal starts at the next quote
+                    match code[begin..].find('"') {
+                        Some(quote) => begin += quote + 1,
+                        None => break,
+                    }
+                }
                 if let Some(text) = literal_after(code, begin) {
                     found.push((
                         text,

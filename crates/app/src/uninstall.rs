@@ -109,13 +109,16 @@ pub fn describe(loc: &Locations, data: Data) -> String {
         Err(error) => format!("- The Claude Code settings cannot be changed now: {error}"),
     });
     lines.push(match autostart::state_for(&loc.autostart_name, &loc.exe) {
-        Ok(autostart::State::Off | autostart::State::Unsupported) => {
+        Ok(autostart::State::Off) => {
             "- There is no start entry of the system: nothing to remove there.".to_owned()
         }
         Ok(autostart::State::Stale { found }) => {
             format!("- Remove the start entry of the system (it starts {found}, not this file).")
         }
-        Ok(_) => "- Remove the start entry of the system (\"start with Windows\").".to_owned(),
+        Ok(_) => format!(
+            "- Remove the start entry of the system (the box \"{}\").",
+            autostart::LABEL
+        ),
         Err(error) => format!("- The start entry cannot be read: {error}"),
     });
     lines.push(match data {
@@ -160,7 +163,7 @@ pub fn run(loc: &Locations, data: Data, data_now: bool) -> Report {
     }
 
     match autostart::state_for(&loc.autostart_name, &loc.exe) {
-        Ok(autostart::State::Off | autostart::State::Unsupported) => {}
+        Ok(autostart::State::Off) => {}
         Ok(_) => match autostart::set_for(&loc.autostart_name, &loc.exe, false) {
             Ok(_) => report
                 .lines

@@ -4,22 +4,46 @@
 //! Windows: one value below `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, so that no
 //! administrator rights are needed. The state shown to the person is the real one: Windows keeps
 //! "switched off in the Startup apps list" in a second place (`...\Explorer\StartupApproved\Run`),
-//! and that is read as well. Other systems follow in their own issues; there the module reports
-//! that the switch is not available.
+//! and that is read as well.
+//!
+//! Linux: a desktop entry in the autostart folder of the desktop; macOS: a LaunchAgent property
+//! list. Both are plain files, handled in `autostart_files.rs`; here only the choice of the folder
+//! from the environment is done. Linux and macOS were compiled and linted, not tried.
 
 use std::path::Path;
 
-/// Name of the value in the `Run` key.
-#[cfg_attr(not(windows), allow(dead_code))]
+/// Name of the entry: the value in the `Run` key (Windows) or the name of the file (Linux, macOS).
+#[cfg(windows)]
 pub const VALUE_NAME: &str = "UsageCockpit";
+#[cfg(not(windows))]
+pub const VALUE_NAME: &str = "usage-cockpit";
 
 /// Name of the entry when `USAGE_COCKPIT_HOME` is set.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg(windows)]
 const TEST_VALUE_NAME: &str = "UsageCockpitTestHome";
+#[cfg(not(windows))]
+const TEST_VALUE_NAME: &str = "usage-cockpit-test-home";
+
+/// The text of the box in the settings dialog.
+#[cfg(windows)]
+pub const LABEL: &str = "Start with Windows (when you sign in)";
+#[cfg(target_os = "macos")]
+pub const LABEL: &str = "Start at login";
+#[cfg(all(not(windows), not(target_os = "macos")))]
+pub const LABEL: &str = "Start with the desktop session (when you log in)";
+
+/// What the dialog says when the system has the entry switched off.
+#[cfg(windows)]
+pub const SWITCHED_OFF_TEXT: &str =
+    "Switched off in the Windows list of startup apps. Ticking the box switches it on again.";
+#[cfg(target_os = "macos")]
+pub const SWITCHED_OFF_TEXT: &str =
+    "Switched off in the login items of the system. Ticking the box switches it on again.";
+#[cfg(all(not(windows), not(target_os = "macos")))]
+pub const SWITCHED_OFF_TEXT: &str = "Switched off in the startup applications of your desktop. Ticking the box switches it on again.";
 
 /// What the system has for the cockpit.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(not(windows), allow(dead_code))]
 pub enum State {
     /// No start entry.
     Off,
@@ -28,11 +52,9 @@ pub enum State {
     /// An entry that starts another file (the program was moved, or a copy was set up); `found`
     /// is the command stored.
     Stale { found: String },
-    /// An entry exists, but the person switched it off in the Windows list of startup apps.
-    SwitchedOffInWindows,
-    /// This system has no such switch yet.
-    #[cfg_attr(windows, allow(dead_code))]
-    Unsupported,
+    /// An entry exists, but the person switched it off in the startup list of the system (on
+    /// Windows the list of startup apps, on Linux the startup applications of the desktop).
+    SwitchedOff,
 }
 
 /// The command stored in the `Run` value: the path in double quotes, as Windows expects it for a
@@ -58,7 +80,7 @@ fn classify(stored: Option<&str>, approved: Option<&[u8]>, exe: &Path) -> State 
         return State::Off;
     };
     if approved.is_some_and(approved_says_off) {
-        return State::SwitchedOffInWindows;
+        return State::SwitchedOff;
     }
     if stored.trim().eq_ignore_ascii_case(&run_value(exe)) {
         State::On
@@ -332,20 +354,42 @@ mod imp {
     }
 }
 
+/// Linux and macOS: the entry is a file; this part only finds the folder.
 #[cfg(not(windows))]
 mod imp {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
-    use super::State;
+    use super::{State, VALUE_NAME};
+    use crate::autostart_files::{self as files, Kind};
 
-    pub const VALUE: &str = "";
+    pub const VALUE: &str = VALUE_NAME;
 
-    pub fn state(_name: &str, _exe: &Path) -> Result<State, String> {
-        Ok(State::Unsupported)
+    #[cfg(target_os = "macos")]
+    const KIND: Kind = Kind::Plist;
+    #[cfg(not(target_os = "macos"))]
+    const KIND: Kind = Kind::Desktop;
+
+    #[cfg(target_os = "macos")]
+    fn folder() -> Result<PathBuf, String> {
+        files::launch_agents_dir(std::env::var_os("HOME"))
+            .ok_or_else(|| "the home folder cannot be found (HOME is not set)".to_owned())
     }
 
-    pub fn set(_name: &str, _exe: &Path, _on: bool) -> Result<State, String> {
-        Err("starting with the system is not available on this system yet".to_owned())
+    #[cfg(not(target_os = "macos"))]
+    fn folder() -> Result<PathBuf, String> {
+        files::xdg_autostart_dir(
+            std::env::var_os("XDG_CONFIG_HOME"),
+            std::env::var_os("HOME"),
+        )
+        .ok_or_else(|| "the configuration folder cannot be found (HOME is not set)".to_owned())
+    }
+
+    pub fn state(name: &str, exe: &Path) -> Result<State, String> {
+        files::state_in(KIND, &folder()?, name, exe)
+    }
+
+    pub fn set(name: &str, exe: &Path, on: bool) -> Result<State, String> {
+        files::set_in(KIND, &folder()?, name, exe, on)
     }
 }
 
@@ -387,11 +431,11 @@ mod tests {
         );
         assert_eq!(
             classify(Some(&mine), Some(&[3, 0, 0, 0]), &exe()),
-            State::SwitchedOffInWindows
+            State::SwitchedOff
         );
         assert_eq!(
             classify(Some(&mine), Some(&[7, 0, 0, 0]), &exe()),
-            State::SwitchedOffInWindows
+            State::SwitchedOff
         );
         assert_eq!(
             classify(Some(r#""D:\old\usage-cockpit.exe""#), None, &exe()),
@@ -437,10 +481,7 @@ mod tests {
 
         // "switched off" in the Windows list is reported, and switching on clears it
         imp::raw_approved(&name, &[3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-        assert_eq!(
-            imp::state(&name, &other).unwrap(),
-            State::SwitchedOffInWindows
-        );
+        assert_eq!(imp::state(&name, &other).unwrap(), State::SwitchedOff);
         assert_eq!(imp::set(&name, &other, true).unwrap(), State::On);
 
         assert_eq!(imp::set(&name, &other, false).unwrap(), State::Off);
@@ -449,10 +490,11 @@ mod tests {
         assert_eq!(imp::set(&name, &other, false).unwrap(), State::Off);
     }
 
-    #[cfg(not(windows))]
     #[test]
-    fn req_118_other_systems_report_that_the_switch_is_missing() {
-        assert_eq!(state(&exe()).unwrap(), State::Unsupported);
-        assert!(set(&exe(), true).is_err());
+    fn req_118_every_system_names_the_box_and_the_switched_off_text() {
+        assert!(LABEL.starts_with("Start "));
+        assert!(SWITCHED_OFF_TEXT.contains("Ticking the box switches it on again"));
+        assert!(!VALUE_NAME.is_empty() && !TEST_VALUE_NAME.is_empty());
+        assert_ne!(VALUE_NAME, TEST_VALUE_NAME);
     }
 }
