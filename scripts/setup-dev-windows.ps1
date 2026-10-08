@@ -118,12 +118,14 @@ function Find-Program {
     if ($command) { return $command.Source }
     # The PATH of this terminal is older than the one Windows has stored if a tool was installed
     # after the terminal was opened (also by this script): look at the stored one as well.
+    # (the computer's PATH comes first in Windows, then the user's)
     $stored = Get-StoredPathDirs @(
-        [Environment]::GetEnvironmentVariable('Path', 'User'),
-        [Environment]::GetEnvironmentVariable('Path', 'Machine')
+        [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+        [Environment]::GetEnvironmentVariable('Path', 'User')
     )
+    # Only programs are taken from the stored folders (not a file without an extension).
     foreach ($dir in (@((Get-CargoBin)) + $stored)) {
-        foreach ($candidate in @("$Name.exe", $Name)) {
+        foreach ($candidate in @("$Name.exe", "$Name.cmd", "$Name.bat")) {
             $path = Join-Path $dir $candidate
             if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
         }
@@ -313,12 +315,13 @@ function Invoke-Setup {
     if (-not $SkipBuild -and -not $CheckOnly) {
         $cargoBin = Get-CargoBin
         if (Test-Path -LiteralPath $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
-        if (Find-Program 'cargo') {
+        $cargo = Find-Program 'cargo'
+        if ($cargo) {
             Write-Host ''
             Write-Host 'Building once to prove that the setup works (cargo build) ...'
             Push-Location $RepoRoot
             try {
-                & cargo build | Out-Host
+                & $cargo build | Out-Host
                 if ($LASTEXITCODE -ne 0) { throw "cargo build failed (exit code $LASTEXITCODE)." }
             } finally { Pop-Location }
             Write-Host 'The build works.'

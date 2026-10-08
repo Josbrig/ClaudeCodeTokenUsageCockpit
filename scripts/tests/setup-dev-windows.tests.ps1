@@ -66,9 +66,12 @@ Assert-Equal ($withOverride[-2..-1] -join ' ') '--override --passive' 'winget ar
 
 # ---- the stored PATH
 $env:COCKPIT_TEST_DIR = 'C:\Tools\X'
-$dirs = Get-StoredPathDirs @('C:\A;"C:\B B";;%COCKPIT_TEST_DIR%\bin', 'C:\A;C:\C', $null)
-Assert-Equal ($dirs -join '|') 'C:\A|C:\B B|C:\Tools\X\bin|C:\C' 'the stored PATH is split, expanded and without duplicates'
-Remove-Item Env:COCKPIT_TEST_DIR
+try {
+    $dirs = Get-StoredPathDirs @('C:\A;"C:\B B";;%COCKPIT_TEST_DIR%\bin', 'C:\A;C:\C', $null)
+    Assert-Equal ($dirs -join '|') 'C:\A|C:\B B|C:\Tools\X\bin|C:\C' 'the stored PATH is split, expanded and without duplicates'
+} finally {
+    Remove-Item Env:COCKPIT_TEST_DIR -ErrorAction SilentlyContinue
+}
 Assert-Equal @(Get-StoredPathDirs @()).Count 0 'no stored PATH gives no folders'
 
 # a program that is only on the stored PATH is found (a folder with a fake program)
