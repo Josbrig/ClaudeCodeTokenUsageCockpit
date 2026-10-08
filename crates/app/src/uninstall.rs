@@ -116,7 +116,7 @@ pub fn describe(loc: &Locations, data: Data) -> String {
             format!("- Remove the start entry of the system (it starts {found}, not this file).")
         }
         Ok(_) => format!(
-            "- Remove the start entry of the system (the box \"{}\").",
+            "- Remove the start entry of the system (made with the box \"{}\" of an earlier version).",
             autostart::LABEL
         ),
         Err(error) => format!("- The start entry cannot be read: {error}"),

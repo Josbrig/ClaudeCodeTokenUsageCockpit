@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Start with the user's sign-in (REQ-118).
+//! The start entry of the system that earlier versions made with the switch "Start with Windows"
+//! (REQ-118, removed on the owner's decision of 2026-10-08). The program no longer offers the
+//! switch; "Remove everything" still reads such an entry and removes it.
 //!
 //! Windows: one value below `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, so that no
 //! administrator rights are needed. The state shown to the person is the real one: Windows keeps
@@ -24,21 +26,13 @@ const TEST_VALUE_NAME: &str = "UsageCockpitTestHome";
 #[cfg(not(windows))]
 const TEST_VALUE_NAME: &str = "usage-cockpit-test-home";
 
-/// The text of the box in the settings dialog.
+/// The text of the box in the settings dialog of earlier versions; named when the entry is removed.
 #[cfg(windows)]
 pub const LABEL: &str = "Start with Windows (when you sign in)";
 #[cfg(target_os = "macos")]
 pub const LABEL: &str = "Start at login";
 #[cfg(all(not(windows), not(target_os = "macos")))]
 pub const LABEL: &str = "Start with the desktop session (when you log in)";
-
-/// What the dialog says when the system has the entry switched off.
-#[cfg(windows)]
-pub const SWITCHED_OFF_TEXT: &str =
-    "Switched off in the Windows list of startup apps. Ticking the box switches it on again.";
-// On macOS this is never shown: the program only knows whether the file is there.
-#[cfg(not(windows))]
-pub const SWITCHED_OFF_TEXT: &str = "Switched off in the startup applications of your desktop. Ticking the box switches it on again.";
 
 /// What the system has for the cockpit.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,22 +94,12 @@ pub fn default_name() -> &'static str {
     }
 }
 
-/// The real state for `exe`.
-pub fn state(exe: &Path) -> Result<State, String> {
-    state_for(default_name(), exe)
-}
-
-/// Switches the start entry on (for `exe`) or off and returns the state afterwards.
-pub fn set(exe: &Path, on: bool) -> Result<State, String> {
-    set_for(default_name(), exe, on)
-}
-
-/// [`state`] for an entry of another name (tests use their own, never the real one).
+/// The real state of the entry `name` for `exe` (tests use their own name, never the real one).
 pub fn state_for(name: &str, exe: &Path) -> Result<State, String> {
     imp::state(name, exe)
 }
 
-/// [`set`] for an entry of another name.
+/// Switches the entry `name` on (for `exe`) or off and returns the state afterwards.
 pub fn set_for(name: &str, exe: &Path, on: bool) -> Result<State, String> {
     imp::set(name, exe, on)
 }
@@ -489,9 +473,8 @@ mod tests {
     }
 
     #[test]
-    fn req_118_every_system_names_the_box_and_the_switched_off_text() {
+    fn req_118_every_system_names_the_box_of_earlier_versions() {
         assert!(LABEL.starts_with("Start "));
-        assert!(SWITCHED_OFF_TEXT.contains("Ticking the box switches it on again"));
         assert!(!VALUE_NAME.is_empty() && !TEST_VALUE_NAME.is_empty());
         assert_ne!(VALUE_NAME, TEST_VALUE_NAME);
     }

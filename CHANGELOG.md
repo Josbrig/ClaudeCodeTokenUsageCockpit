@@ -5,6 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Removed
+- The switch *Start with Windows* (and its Linux and macOS forms) in the settings: a window started with the system has no live values to show. *Remove everything* still removes an entry made by an earlier version.
+
 ### Changed
 - The Windows setup script also looks at the `PATH` that Windows has stored, so it finds a tool it installed earlier in the same terminal.
 - The bridge can be set up from a folder whose path contains a space: on Windows with the short folder name or a quoted path, on Linux and macOS (not tried yet) quoted for `sh -c`.
