@@ -43,7 +43,7 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-104 Credential handling | #60 | – | – | approved |
 | REQ-105 Resource usage | #42, #49, #61, #69 | – | – | approved |
 | REQ-106 Readability at a glance | #68 | – | – | approved |
-| REQ-107 Licence compliance | #23, #58, #64, #70 | – | – | approved |
+| REQ-107 Licence compliance | #23, #58, #64, #70 | – | `scripts/third-party-licenses.ps1 -Check` (`cargo deny check licenses`, list up to date) | approved |
 | REQ-108 Robustness against format changes | #28, #29, #30, #45, #60 | – | – | approved |
 | REQ-109 Bridge speed and fallback output | #30, #31, #61, #69 | – | – | approved |
 | REQ-110 Automated tests | #22, #23, #63 | – | – | approved |

@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.0] - prepared 2026-10-08, not yet released
+
+First pre-release, Windows x64. The notes for the release, including what it cannot do, are in [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md).
+
 ### Removed
 - The switch *Start with Windows* (and its Linux and macOS forms) in the settings: a window started with the system has no live values to show. *Remove everything* still removes an entry made by an earlier version.
 
@@ -14,6 +18,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Windows x64 executable no longer imports the Visual C++ runtime (the C runtime is linked in; not yet tried on a clean Windows); the bridge starts faster (median 66 ms instead of 101 ms on the development machine).
 
 ### Added
+- `NOTICE`, `THIRD_PARTY_LICENSES.md` (made with `cargo about`), `deny.toml` (allowed licences, `cargo deny check licenses`) and `scripts/third-party-licenses.ps1` / `.sh`.
+- `docs/current-state.md` (data sources, what works when, concept problems) and `docs/retrospective.md` (what went wrong in the project and what has to change).
+- Screenshots of both views in the README and the user guide.
+- When a window has no current percentage, it shows the tokens of the last 5 hours or 7 days from the transcript files.
 - `scripts/tests/cmake-build.tests.ps1 -OtherTargets`: configures the CMake build for Linux x64, Linux arm64 and macOS arm64 from Windows and runs the check target for each (the code and test code of those targets pass clippy; nothing is built into a program, linked or run).
 - `scripts/setup-dev-macos.sh`: checks and, on request, installs the tools needed to develop the program on a Mac with Apple Silicon (Command Line Tools, Rust, CMake and Ninja through Homebrew); Homebrew itself is never installed by it.
 - `scripts/setup-dev-linux.sh`: checks and, on request, installs the tools needed to develop the program on Linux (Rust, C compiler, Git, CMake, Ninja and the run-time libraries of the window; apt-based systems), with tests that use stand-in programs and are cut off from the computer they run on.
