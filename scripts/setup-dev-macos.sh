@@ -14,14 +14,21 @@
 #   - CMake and Ninja (for the CMake builds), installed with Homebrew.
 #
 # Homebrew itself is never installed by this script: if it is missing and CMake or Ninja are
-# needed, the script prints the official command and stops with exit code 3. No step needs
+# needed, the script first installs everything else it can, prints the official command and
+# then ends with exit code 3 (with --check: exit code 1 and the command). No step needs
 # administrator rights (the Command Line Tools ask you in their own window).
+#
+# It runs with sh (and with zsh, which is switched to the sh word splitting below).
 #
 # It installs only what is missing and can be run again. It contains no secrets. The official
 # rustup installer adds ~/.cargo/bin to the PATH in your shell profile; nothing else outside the
 # places of the tools is changed. Options and exit codes: see --help.
 
 set -u
+# zsh does not split unquoted variables into words unless told to; this script relies on it
+if [ -n "${ZSH_VERSION:-}" ]; then
+    emulate sh
+fi
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
@@ -33,24 +40,36 @@ BREW_DIRS=${COCKPIT_SETUP_BREW_DIRS-/opt/homebrew/bin /usr/local/bin}
 # How long and how often to look whether the Command Line Tools are installed (seconds).
 CLT_WAIT=${COCKPIT_SETUP_WAIT_SECONDS:-900}
 CLT_POLL=${COCKPIT_SETUP_POLL_SECONDS:-5}
+# a value that is not a whole number would make the wait loop run forever
+case "$CLT_WAIT" in '' | *[!0-9]*) CLT_WAIT=900 ;; esac
+case "$CLT_POLL" in '' | *[!0-9]*) CLT_POLL=5 ;; esac
 
 BREW_INSTALL_COMMAND='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 
+# The first folder that has `brew` wins (on Apple Silicon /opt/homebrew, before an old Intel
+# Homebrew in /usr/local).
 use_brew_bin() {
     for brew_dir in $BREW_DIRS; do
         if [ -x "$brew_dir/brew" ]; then
             PATH="$brew_dir:$PATH"
             export PATH
+            return 0
         fi
     done
+}
+
+# The Command Line Tools (or a full Xcode) are selected and the folder exists.
+clt_present() {
+    clt_path=$(xcode-select -p 2>/dev/null) || return 1
+    [ -d "$clt_path" ]
 }
 
 check_tools() {
     channel=$(toolchain_channel "$REPO_ROOT/rust-toolchain.toml")
     use_cargo_bin
     use_brew_bin
-    if xcode-select -p >/dev/null 2>&1; then
-        state clt 'Xcode Command Line Tools' 1 "$(xcode-select -p 2>/dev/null)"
+    if clt_present; then
+        state clt 'Xcode Command Line Tools' 1 "$clt_path"
         state_program git git Git 'comes with the Command Line Tools'
         state_program cc cc 'C compiler (cc)' 'comes with the Command Line Tools'
     else
@@ -80,7 +99,7 @@ brew_packages() {
 wait_for_clt() {
     echo 'A window of macOS asks you to install the Command Line Tools: agree there. Waiting ...'
     waited=0
-    while ! xcode-select -p >/dev/null 2>&1; do
+    while ! clt_present; do
         if [ "$waited" -ge "$CLT_WAIT" ]; then
             echo "The Command Line Tools are still not installed after $CLT_WAIT seconds; run the script again when the installation is done." >&2
             return 1
@@ -99,7 +118,11 @@ main() {
         exit 3
     fi
     if [ "$(uname -m)" != arm64 ]; then
-        echo "Note: the supported Mac is the one with Apple Silicon (arm64); this one reports $(uname -m)."
+        if [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then
+            echo 'Note: this terminal runs under Rosetta (x86_64) on an Apple Silicon Mac; rustup would install the Intel toolchain. Open a terminal that does not run under Rosetta.'
+        else
+            echo "Note: the supported Mac is the one with Apple Silicon (arm64); this one reports $(uname -m)."
+        fi
     fi
     check_tools
     print_states
@@ -139,8 +162,10 @@ main() {
         [ -n "$brew_needed" ] && [ "$no_brew" = 0 ] && echo "  - with Homebrew:$brew_needed"
         confirm 'Install the missing tools?' || { echo 'Nothing was installed.'; exit 1; }
         if is_missing clt; then
+            # it fails when the tools are already installed or no installer can be started (an SSH
+            # session without a screen): look again before waiting
             xcode-select --install || true
-            wait_for_clt || exit 2
+            clt_present || wait_for_clt || exit 2
         fi
         if is_missing rustup; then
             install_rustup || exit 2
