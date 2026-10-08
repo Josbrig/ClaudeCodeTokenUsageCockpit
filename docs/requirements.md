@@ -278,3 +278,8 @@ Terms used below:
 - Statement: The cockpit shall offer a function (window and command line) that undoes everything it created outside its own executable: the bridge entry in the Claude Code settings (with backup), the start entry of REQ-118 and, on the user's explicit choice, its data and configuration folders; it names the backups that stay, and the executable can then be deleted by hand.
 - Acceptance: After the function ran on a test system, a search for entries of the cockpit in the Claude Code settings and in the system's start entries finds none, and the data and configuration folders are gone when chosen.
 - Type: functional · Origin: owner decision 2026-10-07 · Status: draft
+
+### REQ-120 Token use without status line data
+- Statement: When a window has no current percentage from the status line (no record, or its reset time has passed), the cockpit shall show the tokens of the last window length (5 hours, 7 days) taken from the transcript files, in place of the percentage (no pace, no forecast), so that use in clients that send no status line data (the VS Code extension) is visible.
+- Acceptance: With transcript messages inside the last 5 hours and no current five-hour record, the five-hour row names the token sum of those hours and shows only that sum and no percentage; without such messages the row keeps its previous text.
+- Type: functional · Origin: owner decision 2026-10-08 · Status: draft

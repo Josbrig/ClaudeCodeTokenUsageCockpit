@@ -501,6 +501,27 @@ fn no_data(text: &str) -> WindowView {
     }
 }
 
+/// The text of a row without a percentage: the tokens of the last window length from the
+/// transcripts if there are any, else `text`. The status line sends the percentages; without it
+/// only the token counts are known. Short, because the compact view shows one line.
+fn from_transcripts<Tz: TimeZone>(text: &str, inputs: &Inputs<'_, Tz>, kind: WindowKind) -> String {
+    let Some(stats) = inputs.stats.filter(|s| s.understood_lines > 0) else {
+        return text.to_owned();
+    };
+    let from_ms = inputs
+        .now_ms
+        .saturating_sub(metrics::window_len_s(kind).saturating_mul(1000));
+    let tokens = stats.tokens_between(from_ms, inputs.now_ms);
+    if tokens == 0 {
+        return text.to_owned();
+    }
+    let span = match kind {
+        WindowKind::FiveHour => "5 h",
+        WindowKind::SevenDay => "7 d",
+    };
+    format!("{} tokens in {span}", format::thousands(tokens))
+}
+
 /// One window from the latest record and the current period of that window.
 ///
 /// Also returns the exhaustion forecast, which decides the binding limit.
@@ -512,11 +533,17 @@ where
     Tz::Offset: Display,
 {
     let Some(sample) = metrics::latest(inputs.records).and_then(|r| r.window(kind)) else {
-        return (no_data(WINDOW_NO_DATA), None);
+        return (
+            no_data(&from_transcripts(WINDOW_NO_DATA, inputs, kind)),
+            None,
+        );
     };
     let now_s = inputs.now_ms.div_euclid(1000);
     if sample.resets_at <= now_s {
-        return (no_data(WINDOW_RESET_PASSED), None);
+        return (
+            no_data(&from_transcripts(WINDOW_RESET_PASSED, inputs, kind)),
+            None,
+        );
     }
     let settings = inputs.settings;
     let basic = metrics::basic(
