@@ -11,6 +11,12 @@
 .PARAMETER RunTests
   Also run ctest.
 
+.PARAMETER OtherTargets
+  Also try the other targets from this computer: configure with -DCOCKPIT_TARGET for Linux x64,
+  Linux arm64 and macOS arm64 and run the `check` target (cargo fmt --check and cargo clippy for that
+  target). Nothing is linked or run, so this proves the configuration, the naming and that the code
+  of that system compiles and passes the lints; it does not build a program for it.
+
 .PARAMETER Keep
   Do not delete the temporary build folder at the end.
 
@@ -20,6 +26,7 @@
 [CmdletBinding()]
 param(
     [switch]$RunTests,
+    [switch]$OtherTargets,
     [switch]$Keep
 )
 $ErrorActionPreference = 'Stop'
@@ -113,6 +120,25 @@ try {
     $targetAfter = if (Test-Path -LiteralPath $targetFolder) { (Get-ChildItem -LiteralPath $targetFolder -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object).Count } else { 0 }
     Assert-That ($targetAfter -eq $targetBefore) 'the target folder of plain cargo runs was not touched' "before $targetBefore, after $targetAfter files"
     Assert-That (Test-Path -LiteralPath (Join-Path $build 'cargo-target\release\usage-cockpit.exe')) 'cargo built into the build folder'
+
+    if ($OtherTargets) {
+        $others = @(
+            @{ Triple = 'x86_64-unknown-linux-gnu'; System = 'linux-x64' },
+            @{ Triple = 'aarch64-unknown-linux-gnu'; System = 'linux-arm64' },
+            @{ Triple = 'aarch64-apple-darwin'; System = 'macos-arm64' }
+        )
+        foreach ($other in $others) {
+            $folder = Join-Path ([IO.Path]::GetTempPath()) ('cockpit-cmake-test-' + $other.System + '-' + [guid]::NewGuid().ToString('N'))
+            try {
+                $c = Invoke-Native 'cmake' @('-S', $repo, '-B', $folder, "-DCOCKPIT_TARGET=$($other.Triple)")
+                Assert-That ($c.Code -eq 0) "$($other.System): configure works" $c.Output
+                Assert-That ($c.Output -match [regex]::Escape("target $($other.Triple) ($($other.System))")) "$($other.System): the system name follows from the target"
+                Assert-That ($c.Output -match 'only compiles the tests') "$($other.System): the tests are only compiled for a target that is not the host"
+                $k = Invoke-Native 'cmake' @('--build', $folder, '--config', 'Release', '--target', 'check')
+                Assert-That ($k.Code -eq 0) "$($other.System): the check target (fmt, clippy for that target) passes" ($k.Output -split "`n" | Select-Object -Last 12 | Out-String)
+            } finally { Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
 
     if ($RunTests) {
         $t = Invoke-Native 'ctest' @('--test-dir', $build, '-C', 'Release', '--output-on-failure')
