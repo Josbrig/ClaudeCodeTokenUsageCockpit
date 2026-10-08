@@ -17,15 +17,23 @@
 
 cmake_minimum_required(VERSION 3.21)
 
-# The version is the one of the workspace (Cargo.toml, [workspace.package]).
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml" _cockpit_version_line
-     REGEX "^version = \"[0-9]+\\.[0-9]+\\.[0-9]+[^\"]*\"")
-list(GET _cockpit_version_line 0 _cockpit_version_line)
-string(REGEX REPLACE "^version = \"([^\"]+)\"$" "\\1" COCKPIT_VERSION "${_cockpit_version_line}")
-if(NOT COCKPIT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+")
-  message(FATAL_ERROR "The version could not be read from Cargo.toml (found: '${_cockpit_version_line}')")
+# Never build inside the source tree: CMake's files and the output of cargo would land in it.
+if("${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+  message(FATAL_ERROR "Use a build folder of its own, for example: cmake -S . -B build")
+endif()
+
+# The version is the one of the workspace: the `version = "x.y.z"` line of the table
+# [workspace.package] in Cargo.toml (the text up to the next table).
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml" _cargo_toml)
+string(REGEX MATCH "\\[workspace\\.package\\][^\\[]*" _workspace_package "${_cargo_toml}")
+string(REGEX MATCH "(^|\n)version[ \t]*=[ \t]*\"([0-9]+\\.[0-9]+\\.[0-9]+[^\"]*)\"" _version_line "${_workspace_package}")
+set(COCKPIT_VERSION "${CMAKE_MATCH_2}")
+if(COCKPIT_VERSION STREQUAL "")
+  message(FATAL_ERROR "The version could not be read from the table [workspace.package] of Cargo.toml")
 endif()
 string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" _cmake_version "${COCKPIT_VERSION}")
+# A new version in Cargo.toml makes CMake configure again, so the name of the dist file follows.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml")
 
 # No language: nothing is compiled by CMake, so no C/C++ compiler is looked for.
 project(usage-cockpit VERSION ${_cmake_version} LANGUAGES NONE)
@@ -34,38 +42,51 @@ set(COCKPIT_CARGO "" CACHE FILEPATH "cargo to use (default: found on the PATH or
 set(COCKPIT_TARGET "" CACHE STRING "Rust target triple (default: the host of rustc)")
 
 # ---------------------------------------------------------------- cargo and rustc
+# The cargo bin folder of rustup is looked at first (its `cargo` honours rust-toolchain.toml), then
+# the PATH. Only folders from variables that are set are used. NO_CACHE: a changed option or PATH
+# takes effect at the next configure.
+unset(_cargo)
+unset(_rustc)
+set(_cargo_hints)
+foreach(_home "$ENV{CARGO_HOME}" "$ENV{USERPROFILE}/.cargo" "$ENV{HOME}/.cargo")
+  if(NOT "${_home}" STREQUAL "" AND NOT "${_home}" STREQUAL "/.cargo")
+    list(APPEND _cargo_hints "${_home}/bin")
+  endif()
+endforeach()
 if(COCKPIT_CARGO)
   set(_cargo "${COCKPIT_CARGO}")
 else()
-  set(_cargo_hints "$ENV{CARGO_HOME}/bin" "$ENV{USERPROFILE}/.cargo/bin" "$ENV{HOME}/.cargo/bin")
-  find_program(_cargo cargo HINTS ${_cargo_hints})
+  find_program(_cargo cargo HINTS ${_cargo_hints} NO_CACHE)
 endif()
 if(NOT _cargo)
   message(FATAL_ERROR "cargo was not found. Install the tools first (see docs/development-guide.md) or pass -DCOCKPIT_CARGO=<path>.")
 endif()
 get_filename_component(_cargo_dir "${_cargo}" DIRECTORY)
-find_program(_rustc rustc HINTS "${_cargo_dir}" NO_DEFAULT_PATH)
+find_program(_rustc rustc HINTS "${_cargo_dir}" NO_DEFAULT_PATH NO_CACHE)
 if(NOT _rustc)
-  find_program(_rustc rustc HINTS ${_cargo_hints})
+  find_program(_rustc rustc HINTS ${_cargo_hints} NO_CACHE)
 endif()
 if(NOT _rustc)
   message(FATAL_ERROR "rustc was not found next to cargo (${_cargo_dir}).")
 endif()
 
-# The target triple: given, or the host of rustc (run in the source dir, so that the pinned
-# toolchain of rust-toolchain.toml is the one asked).
+# The host of rustc, run in the source dir so that the pinned toolchain of rust-toolchain.toml is
+# the one asked. (With the rustup `rustc` this can download that toolchain at configure time.)
+execute_process(COMMAND "${_rustc}" -vV
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                OUTPUT_VARIABLE _rustc_info RESULT_VARIABLE _rustc_result
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(NOT _rustc_result EQUAL 0)
+  message(FATAL_ERROR "rustc -vV failed (${_rustc_result}); is the toolchain of rust-toolchain.toml installed?")
+endif()
+string(REGEX MATCH "host: ([^\r\n]+)" _unused "${_rustc_info}")
+set(_host_triple "${CMAKE_MATCH_1}")
+
+# The target triple: given, or the host.
 if(COCKPIT_TARGET)
   set(_triple "${COCKPIT_TARGET}")
 else()
-  execute_process(COMMAND "${_rustc}" -vV
-                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-                  OUTPUT_VARIABLE _rustc_info RESULT_VARIABLE _rustc_result
-                  OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(NOT _rustc_result EQUAL 0)
-    message(FATAL_ERROR "rustc -vV failed (${_rustc_result}); is the toolchain of rust-toolchain.toml installed?")
-  endif()
-  string(REGEX MATCH "host: ([^\r\n]+)" _unused "${_rustc_info}")
-  set(_triple "${CMAKE_MATCH_1}")
+  set(_triple "${_host_triple}")
 endif()
 
 # The name of the system in the file name of a release (see the user guide).
@@ -131,8 +152,15 @@ add_test(NAME cargo-fmt
 add_test(NAME cargo-clippy
   COMMAND ${_cargo_run} clippy --all-targets --locked ${_target_args} -- -D warnings
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+# The tests of a target that is not the host cannot be run here: they are only compiled.
+if(_triple STREQUAL _host_triple)
+  set(_test_args)
+else()
+  set(_test_args --no-run)
+  message(STATUS "target ${_triple} is not the host (${_host_triple}): cargo-test only compiles the tests")
+endif()
 add_test(NAME cargo-test
-  COMMAND ${_cargo_run} test --all --locked ${_target_args}
+  COMMAND ${_cargo_run} test --all --locked ${_target_args} ${_test_args}
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # dist/<name> and dist/SHA256SUMS
@@ -142,6 +170,6 @@ add_custom_target(dist
           "-DDEST_DIR=${CMAKE_BINARY_DIR}/dist"
           "-DNAME=${COCKPIT_DIST_NAME}"
           -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dist.cmake"
-  DEPENDS usage-cockpit
   COMMENT "dist: ${COCKPIT_DIST_NAME}"
   USES_TERMINAL VERBATIM)
+add_dependencies(dist usage-cockpit)

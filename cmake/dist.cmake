@@ -25,8 +25,10 @@ set(_lines "")
 if(EXISTS "${_sums_file}")
   file(STRINGS "${_sums_file}" _old_lines)
   foreach(_line IN LISTS _old_lines)
-    # "<64 hex digits>  <name>"
-    if(NOT _line MATCHES "^[0-9a-f]+  ${NAME}$" AND NOT _line STREQUAL "")
+    # "<hash>  <name>": the line of NAME is dropped (compared as text, not as a pattern, so a
+    # `+` or a dot in the name is no problem), the others stay
+    string(REGEX REPLACE "^[0-9a-fA-F]+  " "" _old_name "${_line}")
+    if(NOT _old_name STREQUAL "${NAME}" AND NOT _line STREQUAL "")
       list(APPEND _lines "${_line}")
     endif()
   endforeach()

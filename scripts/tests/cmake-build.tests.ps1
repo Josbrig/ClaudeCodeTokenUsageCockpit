@@ -51,12 +51,26 @@ $cargoToml = Get-Content -LiteralPath (Join-Path $repo 'Cargo.toml') -Raw
 $version = [regex]::Match($cargoToml, '(?m)^version = "([^"]+)"').Groups[1].Value
 Assert-That ([bool]$version) 'the workspace version is read from Cargo.toml' $version
 
+$targetFolder = Join-Path $repo 'target'
+$targetBefore = if (Test-Path -LiteralPath $targetFolder) { (Get-ChildItem -LiteralPath $targetFolder -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object).Count } else { 0 }
+
 $build = Join-Path ([IO.Path]::GetTempPath()) ('cockpit-cmake-test-' + [guid]::NewGuid().ToString('N'))
 try {
     # configure
     $r = Invoke-Native 'cmake' @('-S', $repo, '-B', $build)
     Assert-That ($r.Code -eq 0) 'configure works' $r.Output
-    Assert-That ($r.Output -match [regex]::Escape("usage-cockpit $version, target x86_64-pc-windows-msvc (windows-x64)")) 'configure names the version and the system'
+    Assert-That ($r.Output -match [regex]::Escape("usage-cockpit $version, target x86_64-pc-windows-msvc (windows-x64)")) 'configure names the version and the system (Windows x64)'
+
+    # an in-source build is refused (tried on a copy of the files: CMake writes its cache before the
+    # check runs, which must not happen in the working tree)
+    $copy = Join-Path ([IO.Path]::GetTempPath()) ('cockpit-cmake-test-src-' + [guid]::NewGuid().ToString('N'))
+    try {
+        [void](New-Item -ItemType Directory (Join-Path $copy 'cmake'))
+        Copy-Item -LiteralPath (Join-Path $repo 'CMakeLists.txt'), (Join-Path $repo 'Cargo.toml') -Destination $copy
+        Copy-Item -LiteralPath (Join-Path $repo 'cmake\dist.cmake') -Destination (Join-Path $copy 'cmake')
+        $inSource = Invoke-Native 'cmake' @('-S', $copy, '-B', $copy)
+        Assert-That ($inSource.Code -ne 0 -and $inSource.Output -match 'build folder of its own') 'an in-source build is refused' $inSource.Output
+    } finally { Remove-Item -LiteralPath $copy -Recurse -Force -ErrorAction SilentlyContinue }
 
     # an unsupported target is refused with a clear message
     $other = Join-Path ([IO.Path]::GetTempPath()) ('cockpit-cmake-test-bad-' + [guid]::NewGuid().ToString('N'))
@@ -95,7 +109,9 @@ try {
         Assert-That ($lines[0] -like '*linux-x64' -and $lines[1] -like "*windows-x64.exe") 'the lines are sorted by file name'
     }
 
-    # cargo output stays in the build folder
+    # cargo output stays in the build folder, and the folder `target` of plain cargo runs is untouched
+    $targetAfter = if (Test-Path -LiteralPath $targetFolder) { (Get-ChildItem -LiteralPath $targetFolder -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object).Count } else { 0 }
+    Assert-That ($targetAfter -eq $targetBefore) 'the target folder of plain cargo runs was not touched' "before $targetBefore, after $targetAfter files"
     Assert-That (Test-Path -LiteralPath (Join-Path $build 'cargo-target\release\usage-cockpit.exe')) 'cargo built into the build folder'
 
     if ($RunTests) {
