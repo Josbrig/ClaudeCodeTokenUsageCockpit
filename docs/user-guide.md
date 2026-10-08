@@ -309,6 +309,8 @@ The program also *reads* the transcript files of Claude Code (`projects/**/*.jso
 
 ## 11. Known limitations
 
+The state of the program and its concept problems are set out in [current-state.md](current-state.md).
+
 - **No percentages from the VS Code extension (observed).** Claude Code hands over the percentages through its status line; the terminal client calls it, the extension apparently does not. Without a terminal session a row without a valid percentage shows token counts from the local files, if there are any, and a percentage that is still valid goes stale.
 - **No data without a running Claude Code session.** Claude Code hands over usage only while it runs and after its first response of a session. The percentages exist only for Claude.ai Pro and Max subscriptions.
 - **Other computers are not visible in the token statistics.** The cockpit shows what Claude Code on this computer hands over, and its transcript statistics cover this computer only.

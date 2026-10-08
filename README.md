@@ -29,6 +29,7 @@ Claude Code passes the usage percentages and reset times of both windows to a co
 
 | Document | Content |
 |---|---|
+| [docs/current-state.md](docs/current-state.md) | Where the program stands today: data sources, what works when, concept problems, how to use it anyway |
 | [docs/user-guide.md](docs/user-guide.md) | The manual: install the portable program, set it up, use it, read every value, remove everything again |
 | [docs/development-guide.md](docs/development-guide.md) | How to set up the tools, build, test and change the program by hand, without AI help |
 | [docs/technical-documentation.md](docs/technical-documentation.md) | How the program works, as built: data flow, modules, files, bridge, calculations, window, setup and removal, build and test |
