@@ -4,6 +4,18 @@ A tiny, always-on-top cockpit that shows your Claude **5-hour** and **weekly** u
 
 > **Status: under development, no release yet.** The program works on Windows (tried); Linux and macOS are not tried yet. Releases will appear on the GitHub *Releases* page. Until then you can build it yourself (see below). Read the [user guide](docs/user-guide.md) for how to start it, connect it to Claude Code and understand the values.
 
+## Screenshots
+
+The compact view stays small and on top of other windows; the detailed view (key `D`) adds the charts, the forecast, the weekly plan and the token statistics per model and per day.
+
+<p align="center">
+  <img src="docs/images/compact-view.png" alt="Compact view: the 5-hour and 7-day windows as bars with pace state, used percentage and time to reset" width="360">
+</p>
+
+<p align="center">
+  <img src="docs/images/detailed-view.png" alt="Detailed view: usage charts with target line, deviation, pace factor, forecast, binding limit, weekly plan and token statistics per model and per day" width="420">
+</p>
+
 ## Features
 
 - Live view of the 5-hour window and the weekly limit: used, remaining, time to reset, with a chart of the current period.
@@ -17,7 +29,7 @@ A tiny, always-on-top cockpit that shows your Claude **5-hour** and **weekly** u
 
 1. Get the program: download the file for your system from the *Releases* page once a release exists, or build it with a current stable Rust toolchain: `cargo build --release` (the program is `target/release/usage-cockpit`, with `.exe` on Windows).
 2. Put it in any folder and start it. The window shows *No data yet*.
-3. Press **Set up bridge** in the window and confirm. After the next response in Claude Code the values appear.
+3. Press **Set up bridge** in the window and confirm. After the next response of Claude Code **in a terminal** (`claude`) the values appear; the VS Code extension apparently does not deliver them (see [docs/current-state.md](docs/current-state.md)).
 
 Details, troubleshooting and how to remove everything again: [docs/user-guide.md](docs/user-guide.md).
 

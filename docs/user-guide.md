@@ -107,6 +107,8 @@ If you had ticked it in an earlier version, the entry is still there. *Remove ev
 
 ### 5.1 The compact view
 
+![The compact view](images/compact-view.png)
+
 Two rows, one per window, and a bottom line. A row (for example `7d`) shows from left to right:
 
 - the **label**: `5h` is the 5-hour window, `7d` the 7-day window;
@@ -119,6 +121,8 @@ Two rows, one per window, and a bottom line. A row (for example `7d`) shows from
 The bottom line says how old the newest data is (for example `updated 12 s ago`) and has, at the right, a small button with two arrows. Its hover text is *Detailed view (D)*. While there is no data, a message replaces the rows ([section 6.3](#63-messages)); under *No data yet* there is the button **Set up bridge**. The dialogs (settings, bridge, *Remove everything*) need more room than the compact view has, so opening one switches to the detailed view first.
 
 ### 5.2 The detailed view
+
+<img src="images/detailed-view.png" alt="The detailed view" width="420">
 
 The small button, or the key `D`, shows the detailed view (about 520 by 640 pixels, scrolling; switching views always sets the size of the view you switch to to its default); the button *Compact view (D)* at the bottom, or `D` again, takes you back. It has, from top to bottom:
 
