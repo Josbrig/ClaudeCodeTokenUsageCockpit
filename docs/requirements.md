@@ -283,3 +283,8 @@ Terms used below:
 - Statement: When a window has no current percentage from the status line (no record, or its reset time has passed), the cockpit shall show the tokens of the last window length (5 hours, 7 days) taken from the transcript files, in place of the percentage (no pace, no forecast), so that use in clients that send no status line data (the VS Code extension) is visible.
 - Acceptance: With transcript messages inside the last 5 hours and no current five-hour record, the five-hour row names the token sum of those hours and shows only that sum and no percentage; without such messages the row keeps its previous text.
 - Type: functional · Origin: owner decision 2026-10-08 · Status: draft
+
+### REQ-121 Persistent usage database
+- Statement: The cockpit shall store the usage data it has seen (token counts per message with time, model and day, and the status line records with their percentages) in a local database in the per-user data folder, add new data incrementally so that every message is counted once, keep it for a retention that the owner sets, show history from it beyond the current run and beyond the 35 days of REQ-025 and REQ-014, and keep showing it when Claude Code has deleted the transcript files.
+- Acceptance: After the transcripts of an old day are deleted from the Claude Code folder, that day is still shown with its token counts; after a restart the history is shown at once without reading all transcripts again; every message is counted once, also after several starts.
+- Type: functional · Origin: owner request 2026-10-08 (issue #191) · Status: draft (open: retention, form of the database, views, several computers)
