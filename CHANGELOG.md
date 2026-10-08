@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Windows x64 executable no longer imports the Visual C++ runtime (the C runtime is linked in; not yet tried on a clean Windows); the bridge starts faster (median 66 ms instead of 101 ms on the development machine).
 
 ### Added
+- `scripts/setup-dev-linux.sh`: checks and, on request, installs the tools needed to develop the program on Linux (Rust, C compiler, pkg-config, Git, curl, CMake, Ninja and the window libraries; apt-based systems), with tests that use stand-in programs.
 - Linux and macOS: *Remove everything* waits for the closing window with `kill -0`, and cleans the one folder of data and configuration on macOS once (compiled and linted, not tried on those systems).
 - Linux and macOS: a start entry (switch in the settings): a desktop entry in the autostart folder on Linux, a LaunchAgent on macOS (compiled and linted, not tried on those systems).
 - Development guide: how to compile and lint the code for Linux and macOS from any computer; checked (compile and lint only) for Linux x64, Linux arm64 and macOS arm64.
