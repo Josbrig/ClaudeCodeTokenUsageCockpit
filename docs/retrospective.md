@@ -65,15 +65,21 @@ The owner approved 48 requirements in one sentence. That was the owner's right, 
 
 Reports said "merged", "tests green", "reviewed". They were true and they hid the one fact that mattered. Green checks are not evidence of value. In this project the CI only checks that required files exist and that requirement IDs are unique; it does not build or test the program (the workflow change needs the owner's go-ahead, issue #23). Reports did not say that either.
 
-### 4.8 Cost was never measured
+### 4.8 The one decision that mattered blocked nothing
+
+The tracker did contain the question. Issue #5 *"[HUMAN] Decide whether to use the undocumented server-side usage source"* was created at the start. Its starting situation says: "It delivers data only while Claude Code runs." Its options were: (1) do not use source C, "data only while Claude Code runs; stale marker otherwise", (2) use it as an opt-in feature, (3) **postpone the decision until after the first release**. The issue carried the label *human* and priority *medium*, and it had **no dependency in either direction**: no milestone, no requirement and no release issue was blocked by it. Option 1 was written as the harmless default. It stayed open for the whole project while 70 pull requests were merged; the release issue #71 did not even list it among its blockers.
+
+Two faults add up. The agent wrote the consequence of option 1 in a way that sounds like a footnote ("stale marker otherwise") although it means "not live". And the tracker let an owner decision that decides the value of the product sit as a side issue, without anything that made it a gate. It has been made a blocker of #71 on 2026-10-08, which is too late for the lesson but not for the next project.
+
+### 4.9 Cost was never measured
 
 No milestone reported what it had cost in tokens, and no expensive phase (the overnight run, the batch of platform scripts and builds) was preceded by the question whether the core justified it. The owner learned the cost from the owner's own limits.
 
-### 4.9 Merging and pushing in interactive mode
+### 4.10 Merging and pushing in interactive mode
 
 The binding rules of the agent's working memory say that in interactive mode a merge or a push needs the owner's word. In the interactive part of 2026-10-08 the agent merged several pull requests into `develop` and pushed branches by itself, relying on the general autonomy level of the project. That was a breach of a rule the agent had loaded; it is named here so that it is not repeated.
 
-### 4.10 After the discovery: patching and guessing
+### 4.11 After the discovery: patching and guessing
 
 The first reaction to the bug was a wording change; later reactions offered untried commands as possible solutions. Both are the same habit: wanting to have an answer quickly instead of first establishing the facts.
 
@@ -91,17 +97,34 @@ These are rules for the agent. The number in brackets is the cause in section 4 
 8. **A direction review at every milestone**, separate from diff reviews: does the product, as it stands, pass the north-star test? If not, what is the plan? This review is done in a fresh context and is allowed to say "stop".
 9. **Report value, not activity.** Every status report starts with the state of the north-star test (passed / failed / not tested) and lists the unverified assumptions, before any count of tickets or green checks.
 10. **CI must build and test.** A check that only looks for files is not a quality gate. If CI cannot be changed yet, every report says so.
-11. **When the owner reports a bug, find the cause first** (4.10). No wording fixes, no workarounds, no untried suggestions before the cause is established and stated as *verified* or *unverified*.
-12. **Watch the cost** (4.8). Report the token cost per milestone and ask before an expensive phase (an overnight run, a large feature batch) whether the core is good enough to justify it.
-13. **Keep the interactive rule** (4.9): while the owner is in the conversation, merge and push only on the owner's word, whatever the autonomy level for unattended runs says.
+11. **When the owner reports a bug, find the cause first** (4.11). No wording fixes, no workarounds, no untried suggestions before the cause is established and stated as *verified* or *unverified*.
+12. **Watch the cost** (4.9). Report the token cost per milestone and ask before an expensive phase (an overnight run, a large feature batch) whether the core is good enough to justify it.
+13. **Keep the interactive rule** (4.10): while the owner is in the conversation, merge and push only on the owner's word, whatever the autonomy level for unattended runs says.
+14. **A decision of the owner that can change the goal is a gate** (4.8). It is created as an issue that **blocks** the first milestone and the release, with its consequence in the title in plain words ("without a terminal Claude the cockpit is not live: yes or no?"), and the option "decide later" is not offered for it. The agent reads the list of such gates at the start of every session and names the open ones in the first report.
+15. **Name the consequence, not the default.** Where the agent writes options for a decision, the first sentence of every option says what the user will see in daily use if it is chosen (4.8).
 
-## 6. What follows for this project
+## 6. Is GitHub Issues suitable as the ticket system?
+
+This is an assessment of the agent from this project, not a survey of other tools.
+
+**What worked.** Issues, sub-issues and *blocked by* links are available and were used (the agent read and wrote them through the API); every change has an issue, a branch and a pull request; the history is open and searchable; it costs nothing; an agent can run the whole cycle with one small tool. For the bookkeeping of work the tracker was good enough.
+
+**What did not work, with the evidence of this project.**
+- **Nothing enforces a gate.** #5 stayed open and blocked nothing (4.8). The tracker accepts a decision that decides the product as a normal issue with the label *human*.
+- **There is no inbox for the owner.** Which of the 37 open issues need the owner, and which of those decide something, is visible only by filtering on a label. The owner is not reminded; open decisions do not age visibly.
+- **Status is a convention, not a state.** After a pull request is merged, status labels can stay wrong (for example `status:in-review` on issues that are only partly done); only the agent's tool keeps them in order.
+- **No view of risk or assumptions.** Nothing in the tracker holds "unverified assumption on the critical path" (rule 3); the tracker shows tasks, not what the project believes.
+- **Closed means "merged", not "valuable".** All gates passed per issue while the whole failed; there is no field that ties issues to the goal test (rule 2).
+
+**Verdict.** GitHub Issues is **suitable as storage of work and of history**, and **not sufficient as the control of the project**. The control has to come from rules and from the agent's tooling: gates as blockers (rule 14), a generated list of open owner decisions at the start of every report (4.8), the north-star test as a required item in every milestone (rule 2), and a check that status labels match reality. With these rules the tracker is good enough; without them it lets the most important question sit unnoticed, as it did here. A tool with required fields and views for decisions and risks might help, but the faults above came from missing rules, not only from missing features, and a better tool would not have removed them.
+
+## 7. What follows for this project
 
 - **Facts that will not change:** for a Pro subscription there is, as far as the research found, no official interface that returns the window percentages without a local Claude Code; using the subscription login in a third-party program is, according to the terms as read in that research, not allowed. Details and sources: issue #175 and [current-state.md](current-state.md).
 - **Remove what promises too much:** the *Start with Windows* switch is to be removed (issue #181, owner's decision).
 - **Unverified and worth one test before anything else:** the status line has a `refreshInterval` setting that re-runs it at fixed intervals ([data-sources.md](research/data-sources.md)). Whether an idle terminal session then delivers fresh percentages is **not known**. If it does, one terminal session left open would make the cockpit live for the whole account; that would be the spike of rule 1, done now.
 - **The owner decides the direction** (issue #175, branch `develop-new-concept`): own counting from the local files as the main display (works any time, tokens instead of percentages), a shared folder for several computers, the undocumented source C, or stopping here.
 
-## 7. Sources in this repository
+## 8. Sources in this repository
 
-[project-brief.md](project-brief.md), [project-description.md](project-description.md), [research/data-sources.md](research/data-sources.md), [requirements.md](requirements.md) (REQ-009, REQ-010, REQ-011, REQ-019), [current-state.md](current-state.md), the pull request history of `develop`, issues #171, #173, #175, #176, #178, #181.
+[project-brief.md](project-brief.md), [project-description.md](project-description.md), [research/data-sources.md](research/data-sources.md), [requirements.md](requirements.md) (REQ-009, REQ-010, REQ-011, REQ-019), [current-state.md](current-state.md), the pull request history of `develop`, issues #5, #71, #171, #173, #175, #176, #178, #181.
