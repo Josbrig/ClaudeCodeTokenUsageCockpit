@@ -5,6 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- `scripts/build.ps1`: makes a CMake build folder, asks which build tool to use (only what is installed) and what to build, and builds everything that can be built (the program, the test program `tools/usage-probe`, the checks, the tests, the release file); with tests in `scripts/tests/build.tests.ps1`. CMake got the target `usage-probe` and the tests `probe-cargo-fmt`, `probe-cargo-clippy` and `probe-cargo-test`; `check` covers the test program too.
+
 ## [0.1.0] - 2026-10-08 (pre-release)
 
 First pre-release, Windows x64. The notes for the release, including what it cannot do, are in [docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md).

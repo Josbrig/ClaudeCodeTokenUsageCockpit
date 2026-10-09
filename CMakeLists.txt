@@ -129,6 +129,25 @@ message(STATUS "cargo: ${_cargo}")
 # `cargo` run in the source dir, output in the build dir.
 set(_cargo_run ${CMAKE_COMMAND} -E env "CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo-target" "${_cargo}")
 
+# The test program tools/usage-probe is a cargo project of its own (own manifest, lock file and
+# target folder); it is built and checked here too, but it is not part of the release (dist).
+set(_probe_manifest "${CMAKE_CURRENT_SOURCE_DIR}/tools/usage-probe/Cargo.toml")
+set(_probe_release_dir "${CMAKE_BINARY_DIR}/cargo-target-probe/release")
+if(_triple MATCHES "windows")
+  set(COCKPIT_PROBE_EXE "${_probe_release_dir}/usage-probe.exe")
+else()
+  set(COCKPIT_PROBE_EXE "${_probe_release_dir}/usage-probe")
+endif()
+if(COCKPIT_TARGET)
+  set(_probe_release_dir "${CMAKE_BINARY_DIR}/cargo-target-probe/${_triple}/release")
+  if(_triple MATCHES "windows")
+    set(COCKPIT_PROBE_EXE "${_probe_release_dir}/usage-probe.exe")
+  else()
+    set(COCKPIT_PROBE_EXE "${_probe_release_dir}/usage-probe")
+  endif()
+endif()
+set(_cargo_run_probe ${CMAKE_COMMAND} -E env "CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo-target-probe" "${_cargo}")
+
 # ---------------------------------------------------------------- targets
 add_custom_target(usage-cockpit ALL
   COMMAND ${_cargo_run} build --release --locked ${_target_args}
@@ -136,11 +155,19 @@ add_custom_target(usage-cockpit ALL
   COMMENT "cargo build --release (${_triple})"
   USES_TERMINAL VERBATIM)
 
+add_custom_target(usage-probe ALL
+  COMMAND ${_cargo_run_probe} build --release --locked --manifest-path "${_probe_manifest}" ${_target_args}
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "cargo build --release of tools/usage-probe (${_triple})"
+  USES_TERMINAL VERBATIM)
+
 add_custom_target(check
   COMMAND ${_cargo_run} fmt --all --check
   COMMAND ${_cargo_run} clippy --all-targets --locked ${_target_args} -- -D warnings
+  COMMAND ${_cargo_run_probe} fmt --check --manifest-path "${_probe_manifest}"
+  COMMAND ${_cargo_run_probe} clippy --all-targets --locked ${_target_args} --manifest-path "${_probe_manifest}" -- -D warnings
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMENT "cargo fmt --check and cargo clippy -D warnings"
+  COMMENT "cargo fmt --check and cargo clippy -D warnings (main workspace and tools/usage-probe)"
   USES_TERMINAL VERBATIM)
 
 # The tests are run by CTest (`ctest --test-dir build -C Release`, or the `test` target that
@@ -161,6 +188,15 @@ else()
 endif()
 add_test(NAME cargo-test
   COMMAND ${_cargo_run} test --all --locked ${_target_args} ${_test_args}
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+add_test(NAME probe-cargo-fmt
+  COMMAND ${_cargo_run_probe} fmt --check --manifest-path "${_probe_manifest}"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+add_test(NAME probe-cargo-clippy
+  COMMAND ${_cargo_run_probe} clippy --all-targets --locked ${_target_args} --manifest-path "${_probe_manifest}" -- -D warnings
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+add_test(NAME probe-cargo-test
+  COMMAND ${_cargo_run_probe} test --locked ${_target_args} ${_test_args} --manifest-path "${_probe_manifest}"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # dist/<name> and dist/SHA256SUMS
