@@ -152,7 +152,7 @@ if ($r.Text -match 'CMake was not found|cargo was not found') {
 } else {
     Assert-Equal $r.Code 0 'plan only: exit code 0'
     Assert-True ($r.Text -match 'build usage-cockpit' -and $r.Text -match 'build tools/usage-probe' -and $r.Text -notmatch 'dist') 'plan only: the chosen parts are in the plan' $r.Text
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) $folder))) 'plan only: no folder was made'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $RepoRoot $folder))) 'plan only: no folder was made'
     $r = Invoke-Script @('-PlanOnly', '-Yes', '-Parts', 'nonsense', '-BuildFolder', $folder)
     Assert-Equal $r.Code 2 'wrong parts: exit code 2'
     $r = Invoke-Script @('-PlanOnly', '-Yes', '-Generator', 'No Such Generator', '-BuildFolder', $folder)
@@ -164,6 +164,27 @@ if ($r.Text -match 'CMake was not found|cargo was not found') {
     Assert-True ($r.Text -match 'Which build tool shall CMake use\?' -and $r.Text -match 'What shall be built\?' -and $r.Text -match 'release file \(dist\)') 'asked: both questions are shown and everything is planned' $r.Text
     $r = Invoke-Script @('-PlanOnly', '-BuildFolder', $folder) "1`nq`n"
     Assert-Equal $r.Code 2 'asked: q at the second question cancels'
+
+    # a folder made with another tool: -Yes alone does not delete it, -ReplaceFolder would (plan only here)
+    $other = Join-Path $RepoRoot ('build-other-test-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    [void](New-Item -ItemType Directory $other)
+    try {
+        $rootText = $RepoRoot.Replace([string][char]92, '/')
+        Set-Content -LiteralPath (Join-Path $other 'CMakeCache.txt') -Value @('CMAKE_GENERATOR:INTERNAL=Unix Makefiles', "CMAKE_HOME_DIRECTORY:INTERNAL=$rootText")
+        $name = Split-Path -Leaf $other
+        $r = Invoke-Script @('-PlanOnly', '-Yes', '-Generator', 'Ninja', '-BuildFolder', $name)
+        Assert-Equal $r.Code 2 'another tool, -Yes alone: nothing is deleted, exit code 2'
+        Assert-True ($r.Text -match 'ReplaceFolder') '-Yes alone: the message names -ReplaceFolder' $r.Text
+        Assert-True (Test-Path -LiteralPath (Join-Path $other 'CMakeCache.txt')) '-Yes alone: the folder is still there'
+        $r = Invoke-Script @('-PlanOnly', '-Yes', '-ReplaceFolder', '-Generator', 'Ninja', '-BuildFolder', $name)
+        Assert-Equal $r.Code 0 '-ReplaceFolder with a plan only: exit code 0'
+        Assert-True (Test-Path -LiteralPath (Join-Path $other 'CMakeCache.txt')) 'plan only: even with -ReplaceFolder nothing is deleted'
+        $r = Invoke-Script @('-PlanOnly', '-Generator', 'Ninja', '-Parts', 'app', '-BuildFolder', $name) "n`n"
+        Assert-Equal $r.Code 2 'another tool, answer no: cancelled, exit code 2'
+        Assert-True (Test-Path -LiteralPath (Join-Path $other 'CMakeCache.txt')) 'answer no: the folder is still there'
+    } finally {
+        Remove-Item -LiteralPath $other -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 if ($failed -gt 0) { Write-Host "`n$failed check(s) failed."; exit 1 }

@@ -33,8 +33,8 @@
   missing, unless -Yes (then all).
 
 .PARAMETER Yes
-  Ask nothing; use the parameters, else the defaults. An existing folder of another tool is
-  deleted only together with -ReplaceFolder.
+  Ask nothing; use the parameters, else the defaults. -Yes alone never deletes a folder: an
+  existing folder of another tool is deleted only with -ReplaceFolder.
 
 .PARAMETER ReplaceFolder
   Delete an existing build folder that was made with another generator without asking.
@@ -217,6 +217,8 @@ function Test-Deletable {
     if (-not $Full) { return $false }
     $cache = Join-Path $Full 'CMakeCache.txt'
     if (-not (Test-Path -LiteralPath $cache)) { return $false }
+    # a link (junction or symbolic link) as the folder is never deleted
+    if ((Get-Item -LiteralPath $Full -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
     $line = Get-Content -LiteralPath $cache | Where-Object { $_ -match '^CMAKE_HOME_DIRECTORY:INTERNAL=' } | Select-Object -First 1
     if (-not $line) { return $false }
     $home1 = ($line -replace '^CMAKE_HOME_DIRECTORY:INTERNAL=', '').Replace('/', '\').TrimEnd('\')
@@ -350,8 +352,14 @@ function Invoke-Build {
             Write-Host 'It is not a build folder of this repository that the script may delete. Choose another folder with -BuildFolder.'
             return 2
         }
-        $delete = $ReplaceFolder -or (Confirm-Yes "Delete the folder and make it again with '$chosen'?")
-        if (-not $delete) { Write-Host 'Cancelled; nothing was changed.'; return 2 }
+        # -Yes alone never deletes; only -ReplaceFolder or a typed yes does.
+        $delete = $ReplaceFolder
+        if (-not $delete -and -not $Yes) { $delete = Confirm-Yes "Delete the folder and make it again with '$chosen'?" }
+        if (-not $delete) {
+            if ($Yes) { Write-Host 'Nothing was changed. Run again with -ReplaceFolder to delete the folder, or choose another folder with -BuildFolder.' }
+            else { Write-Host 'Cancelled; nothing was changed.' }
+            return 2
+        }
         if (-not $PlanOnly) {
             Remove-Item -LiteralPath $full -Recurse -Force
             Write-Host "Deleted $full."
