@@ -12,7 +12,7 @@ The program (`usage-cockpit`) is a small window that shows how much of the 5-hou
 |---|---|---|
 | **A. Status line** of Claude Code (documented) | the 5-hour and 7-day percentages and reset times | only when Claude Code runs as the **terminal client** and has just answered |
 | **B. Transcript files** of Claude Code on this computer (format undocumented) | token counts per message, model and day | any time, this computer only, last 35 days |
-| **C. Server-side usage source** (undocumented, reported by community projects) | the same percentages without a running session | never used; requirement REQ-019 is blocked by an open owner decision |
+| **C. Server-side usage source** (undocumented, reported by community projects) | the same percentages without a running session | read once with the stored token of Claude Code (HTTP 200, both windows); not part of the program; REQ-124 is a draft and the position on the terms of use is the owner's |
 
 How source A works: Claude Code starts the program as a short command (the *bridge*, `usage-cockpit bridge`) at every status line update, hands it the data on standard input, and the bridge stores one record in the data folder. The window reads that folder. The bridge works whether or not the window runs.
 
@@ -33,8 +33,8 @@ The percentages are the only values that tell how near the limit is. Token count
 1. **Not live without a terminal session.** The percentages exist only inside a running terminal Claude Code at the moment of an answer. The program cannot ask for them. An autostart of the window therefore shows no live values after the system start; it shows the last ones, stale.
 2. **The VS Code extension apparently does not feed it.** Observed on one computer: all recent sessions ran in the extension and no record arrived after the last terminal session. The official description of the status line is for the terminal client. Whoever works only in the extension gets no percentages.
 3. **Not autonomous.** The program needs a Claude Code installation with the bridge set up on every computer that is to be watched. It cannot watch other computers by itself.
-4. **No official server-side interface for a Pro account.** The organisation interfaces (usage and cost, Claude Code analytics, enterprise analytics, team export) exist for organisations, not for a Pro subscription. According to the terms of use as read by the research agent (not re-checked by hand, no legal advice), using the login of a subscription in a third-party program is not permitted. Source C is undocumented and its terms position is unclear. So a Pro account has no official way to read the window percentages without a local Claude Code.
-5. **Requirements that forbid the alternatives.** REQ-104 (never store, log or display credentials) and REQ-103 (no network traffic except a possible REQ-019) were written for the status line design. A login based source would need an owner decision on both.
+4. **No official server-side interface for a Pro account.** The organisation interfaces (usage and cost, Claude Code analytics, enterprise analytics, team export) exist for organisations, not for a Pro subscription. The Consumer Terms prohibit access to the Services by automated means (a script) except with an API key or with Anthropic's explicit permission; no explicit ban of reading one's own usage and no explicit permission was found (see [research/token-dimensions-and-terms.md](research/token-dimensions-and-terms.md)). Source C is undocumented. So a Pro account has no official way to read the window percentages without a local Claude Code.
+5. **Requirements that stood in the way of the alternatives.** REQ-104 (never store, log or display credentials) and REQ-103 (no network traffic) were written for the status line design. They are amended: the network only for the account source of REQ-124, the token only read into memory and never copied.
 6. **The limit was documented only in part.** The README and the research page state that data arrives only while Claude Code runs and only for Pro and Max. They did not state that the VS Code extension is not served, and the project description listed source C as an open decision of the owner, without spelling out what that means for daily use.
 
 ## 5. Requirements
@@ -45,7 +45,7 @@ All requirements are in [requirements.md](requirements.md); the link from requir
 |---|---|---|
 | Display of the windows and calculations | REQ-001 to REQ-008, REQ-021, REQ-022, REQ-027 | approved, built, tested with sample data; **they need the percentages (source A)** |
 | Data age, refresh, no-data state, sessions | REQ-009, REQ-010, REQ-016, REQ-017 | approved, built |
-| Data sources | REQ-011 (status line), REQ-014 and REQ-015 (token statistics, estimate) | approved, built; REQ-019 (server-side source) **blocked, owner decision open** |
+| Data sources | REQ-011 (status line), REQ-014 and REQ-015 (token statistics, estimate) | approved, built; REQ-124 (account usage with the stored token) and REQ-019 (other server-side sources, deferred) are drafts |
 | Bridge and its setup | REQ-012, REQ-020, REQ-023, REQ-109 | approved, built; tests with sample data in the repo; a hand test with the real terminal client is reported by the author and not recorded in the repo (section 7) |
 | History, settings, logging, windows, charts | REQ-013, REQ-018, REQ-024 to REQ-026, REQ-028 to REQ-033 | approved, built |
 | Technical and quality requirements | REQ-101 to REQ-116 | approved; most built; releases in CI (REQ-111) wait for the CI workflow files, which need the owner's go-ahead (issue #23) |
@@ -53,7 +53,7 @@ All requirements are in [requirements.md](requirements.md); the link from requir
 | Start with the system | REQ-118 | **rejected** (owner decision 2026-10-08), switch removed; *Remove everything* still removes an old entry |
 | Token use without status line data | REQ-120 | **draft**, built (text in the row only, no chart) |
 
-Only the owner changes an approved requirement. The concept problems above concern REQ-011, REQ-017, REQ-019, REQ-103 and REQ-104.
+Only the owner changes an approved requirement. The concept problems above concern REQ-011, REQ-017, REQ-019, REQ-103, REQ-104 and REQ-124.
 
 ## 6. How to use it anyway
 
@@ -74,7 +74,7 @@ Details: [user-guide.md](user-guide.md).
 | The bridge records percentages with the real Claude Code terminal client, values equal to `/usage` | hand test of the author on Windows, 2026-10-07 (versions 2.1.288 and 2.1.293); **not recorded in the repo**, to be repeated and written down |
 | A non-interactive run (`claude -p`) does not call the status line | one hand run on 2026-10-08; **not recorded in the repo** |
 | The VS Code extension does not call the status line | observed on one computer; the official description is for the terminal; not tested in a controlled way |
-| No official interface returns the window percentages for a Pro account | read from the official documentation by a research agent (list in issue #175); not re-checked by hand |
+| No official interface returns the window percentages for a Pro account | read from the Anthropic documentation (sources in [research/data-sources.md](research/data-sources.md) and issue #175) |
 | Linux and macOS | compiled and linted from Windows only; never run |
 | Several computers together | not tried; not supported by the design |
 
