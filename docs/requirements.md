@@ -5,7 +5,7 @@ Only the project owner sets `approved`. IDs are never reused, even after rejecti
 Statements follow the EARS pattern where it fits ("When <trigger>, the cockpit shall <response>").
 Numeric targets marked *(proposal)* are initial values to be confirmed during approval.
 
-All requirements below, except REQ-019, were approved by the project owner on 2026-10-05 (statement in the chat: "alle REQ genehmigt"; REQ-019 stays draft until the decision on the server-side source). They are derived from the [project brief](project-brief.md), the [project description](project-description.md) and the [research note](research/data-sources.md). Second revision 2026-10-05: gaps for a finished, tested version closed with REQ-020 to REQ-033 and REQ-109 to REQ-116.
+All requirements that existed on 2026-10-05, except REQ-019, were approved by the project owner on that day (statement in the chat: "alle REQ genehmigt"). REQ-019 is a draft that is deferred; the requirements REQ-117 and higher carry their own status. They are derived from the [project brief](project-brief.md), the [project description](project-description.md) and the [research note](research/data-sources.md). Second revision 2026-10-05: gaps for a finished, tested version closed with REQ-020 to REQ-033 and REQ-109 to REQ-116.
 
 Terms used below:
 
@@ -196,7 +196,7 @@ Terms used below:
 - Type: non-functional (platform) · Origin: brief · Status: approved
 
 ### REQ-103 Network use only for the owner's purpose
-- Statement: The cockpit may use the internet to sign in to the owner's Anthropic account and to ask Anthropic for the owner's usage data (REQ-124), and for nothing else: it shall send no usage data, no telemetry and no analytics to anyone, shall make no connection to any other destination, and shall send only what the request to Anthropic needs. Without a network connection it shall keep working with the data it has (database, transcript files, status line records) and say that the account data is not reachable. *(Amended by the owner's decision of 2026-10-08; before: fully offline, no data over the network except to the source of REQ-019. The earlier wording was derived by the agent and not asked for in the project brief.)*
+- Statement: The cockpit may use the internet to sign in to the owner's Anthropic account and to ask Anthropic for the owner's usage data (REQ-124), and for nothing else: it shall send no usage data, no telemetry and no analytics to anyone, shall make no connection to any other destination, and shall send only what the request to Anthropic needs. Without a network connection it shall keep working with the data it has (database, transcript files, status line records) and say that the account data is not reachable. *(Amended by the owner's decision of 2026-10-08; before: fully offline, no data over the network except to the source of REQ-019. The earlier wording was not asked for in the project brief.)*
 - Acceptance: A network capture of a full run shows connections only to the Anthropic hosts that REQ-124 needs and none to any other host; with the network blocked, the views based on the database and the transcript files still work and the account rows say why they are stale; the source code has no other network code (check by `cargo tree` and a search).
 - Type: non-functional (privacy, safety) · Origin: derived, amended by owner decision 2026-10-08 · Status: approved (amended)
 
