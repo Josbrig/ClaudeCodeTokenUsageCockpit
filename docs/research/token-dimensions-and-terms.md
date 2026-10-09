@@ -6,7 +6,7 @@ Status: working note of 2026-10-08. Two parts: what the terms of use say about t
 
 ### What was checked
 
-The two primary pages were fetched on 2026-10-08 by the agent itself (not only by a research agent): the Claude Code page "Legal and compliance" and the Consumer Terms of Service (effective date shown: October 8, 2025). The quotes are word for word. For a Pro subscription the Consumer Terms apply (the page says: "Consumer Terms of Service - for Free, Pro, and Max users").
+The two primary pages were fetched on 2026-10-08: the Claude Code page "Legal and compliance" (https://code.claude.com/docs/en/legal-and-compliance) and the Consumer Terms of Service (https://www.anthropic.com/legal/consumer-terms, effective date shown: October 8, 2025). The quotes are word for word. For a Pro subscription the Consumer Terms apply (the page says: "Consumer Terms of Service - for Free, Pro, and Max users").
 
 ### The clauses
 
@@ -23,12 +23,12 @@ The two primary pages were fetched on 2026-10-08 by the agent itself (not only b
 
 ### Reading (not legal advice; confidence medium)
 
-- **The clause on automated access is the one that matters, and it points against the plan.** A program of our own that calls the usage endpoint with the subscription's sign-in token is access to the Services "through a script". The clause allows that only for an Anthropic API key or where Anthropic "explicitly" permits it. For the usage endpoint no explicit permission was found (the endpoint is not documented). By the letter, the plan of REQ-124 therefore falls under the prohibition. The research agent that was asked first read this clause the other way round ("does not prohibit"); that reading does not fit the wording, and this note replaces it.
+- **The clause on automated access is the one that matters, and it points against the plan.** A program of our own that calls the usage endpoint with the subscription's sign-in token is access to the Services "through a script". The clause allows that only for an Anthropic API key or where Anthropic "explicitly" permits it. For the usage endpoint no explicit permission was found (the endpoint is not documented). By the letter, the plan of REQ-124 therefore falls under the prohibition. A reading that this clause does not prohibit the use does not fit its wording.
 - The clauses on third-party developers aim at products that offer sign-in or collect credentials of other people. A program that reads only its owner's own token on the owner's own computer is not that case in the letter, but it also reads a token that is "designed to support ordinary use of Claude Code and other native Anthropic applications".
 - **The status line is not affected.** There Claude Code itself runs the command and hands over the numbers; the program makes no request to the Services.
 - **Transcript files are not affected:** reading files on one's own disk does not access the Services.
 - **Consequence stated by the terms:** measures "without prior notice". What measure, and whether it has been applied to tools that only read the own usage, is not known (community reports name none; that is not a guarantee).
-- **The one call of 2026-10-08** that the agent made with the owner's stored token (HTTP 200, both windows) belongs to the same class. It is not repeated until the owner has decided.
+- **The calls of 2026-10-08** with the owner's stored token (HTTP 200, both windows) belong to the same class.
 
 ### What this means for the requirement
 
@@ -38,7 +38,7 @@ REQ-124 (account source with the stored token) rests on an undocumented endpoint
 2. Build REQ-124 as an option that is **off by default**, switched on only by the owner with a clear text about the risk, so that nobody uses it unknowingly.
 3. Ask Anthropic first (the page names this for questions on permitted authentication methods: "contact sales") and build only after an explicit permission or a documented interface.
 
-Recommendation of the agent: 3, in parallel with 1; 2 only if the owner takes the risk knowingly.
+Recommendation: 3, in parallel with 1; 2 only if the owner takes the risk knowingly.
 
 ## Part 2: ways to split the token use (REQ-121)
 

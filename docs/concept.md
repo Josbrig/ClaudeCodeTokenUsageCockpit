@@ -394,6 +394,6 @@ Version from `crates/app/Cargo.toml` (`0.x.y` until the first release). `build.r
 | §9–§10 | REQ-024, REQ-031 |
 | §11 | REQ-003, REQ-010, REQ-016, REQ-018, REQ-026, REQ-028, REQ-029, REQ-030, REQ-033, REQ-106, REQ-113, REQ-114, REQ-116 |
 | §12–§14 | REQ-102, REQ-105, REQ-107, REQ-110, REQ-111, REQ-112 |
-| not covered | REQ-019 (owner decision pending) |
+| not covered | REQ-019 (other server-side sources, deferred) and REQ-124 (account usage with the stored token, draft) |
 
 Retention (REQ-025): the cockpit prunes `history-v1.jsonl` at start and every hour under `history.lock`, keeping records of the last 35 days; if the file is still larger than 50 MB, the oldest lines are dropped until it is below 45 MB. Several sessions (REQ-017): the latest record by `received_at_ms` wins for the displayed values; all records go into the history. No network access anywhere (REQ-103).

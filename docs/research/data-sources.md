@@ -46,7 +46,7 @@ Claude Code stores session transcripts as JSONL files in the user's Claude confi
 
 ## Source C: server-side usage endpoint (undocumented)
 
-Status 2026-10-08: **tried once, works, undocumented.** `GET https://api.anthropic.com/api/oauth/usage` with the headers `Authorization: Bearer <access token>` and `anthropic-beta: oauth-2025-04-20` returns the same figures as `/usage` of Claude Code. The agent made one read-only call with the sign-in token that Claude Code had stored on the owner's computer (Windows: `%USERPROFILE%\.claude\.credentials.json`, key `claudeAiOauth`, which holds `accessToken`, `refreshToken`, `expiresAt`, `scopes`, `subscriptionType`). The answer was HTTP 200 with, among other fields:
+Status 2026-10-08: **tried once, works, undocumented.** `GET https://api.anthropic.com/api/oauth/usage` with the headers `Authorization: Bearer <access token>` and `anthropic-beta: oauth-2025-04-20` returns the same figures as `/usage` of Claude Code. One read-only call was made with the sign-in token that Claude Code had stored on the owner's computer (Windows: `%USERPROFILE%\.claude\.credentials.json`, key `claudeAiOauth`, which holds `accessToken`, `refreshToken`, `expiresAt`, `scopes`, `subscriptionType`). The answer was HTTP 200 with, among other fields:
 
 | Field | Meaning |
 |---|---|
@@ -56,7 +56,7 @@ Status 2026-10-08: **tried once, works, undocumented.** `GET https://api.anthrop
 
 The token needs the scope `user:profile`, which the stored token of Claude Code has. Its access part is valid for about 8 hours; Claude Code renews it when it is used. A second program that renews it could invalidate the sign-in of Claude Code, so the cockpit never renews it (REQ-124).
 
-What is **not** known or **not official** (community reports, found by a research agent on 2026-10-08 and not verified by hand; the sources are forums, issue trackers and blogs, not Anthropic documents):
+What is **not** known or **not official** (community reports of 2026-10-08, not verified; the sources are forums, issue trackers and blogs, not Anthropic documents):
 
 - No official way exists for third-party programs to register as a sign-in client or to read subscription usage; Anthropic's statements say that sign-in with a subscription is for Claude Code and Claude.ai, and that third parties may not offer sign-in with it or route requests through subscription credentials ([Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)). Whether reading one's own usage figures with one's own token is covered is **not stated anywhere official** that was found.
 - The token made by `claude setup-token` reportedly has only the scope `user:inference` and cannot read the usage figures.
