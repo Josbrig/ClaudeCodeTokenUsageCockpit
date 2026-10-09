@@ -22,7 +22,7 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-016 No-data state | #44, #55 | – | – | approved |
 | REQ-017 Several sessions | #39 | – | – | approved |
 | REQ-018 Compact window | #47, #53, #65, #66, #67 | – | – | approved |
-| REQ-019 Account usage source (stored token only, D3 terms position is the owner's) | #5, #175 | – | – | draft |
+| REQ-019 Other server-side usage sources (deferred) | #5, #175 | – | – | draft |
 | REQ-020 Bridge record hand-over | #25, #29, #30 | – | – | approved |
 | REQ-021 Usage rate from the current window | #36 | – | – | approved |
 | REQ-022 Window reset detection | #34 | – | – | approved |
@@ -60,3 +60,4 @@ One row per requirement: which issues, pull requests and tests cover it. A requi
 | REQ-121 Persistent usage database | #191 | – | – | draft |
 | REQ-122 Live view of the whole token use | #191 | – | – | draft |
 | REQ-123 Transfer of the history to another computer | #191 | – | – | draft |
+| REQ-124 Account usage percentages with the stored token of Claude Code (D3 is the owner's) | #175 | – | – | draft |

@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Test program for REQ-124: can the usage figures of the own subscription be read with the sign-in
+# token that Claude Code stored? It is its own small project (not a member of the main workspace),
+# so the program and its tests are not part of the build of usage-cockpit.
+
+[package]
+name = "usage-probe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0"
+publish = false
+description = "Test program: reads the usage percentages of the own Claude subscription with the stored sign-in token"
+
+[dependencies]
+serde_json = "1"
+ureq = "3"
+
+[dev-dependencies]
+tempfile = "3"
+
+# an own workspace, so that cargo does not look for the root workspace of the repository
+[workspace]

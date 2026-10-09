@@ -16,6 +16,7 @@ Thumbs.db
 
 # Rust build output
 /target
+/tools/usage-probe/target
 
 # CMake build folder
 /build/

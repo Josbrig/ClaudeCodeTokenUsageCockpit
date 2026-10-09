@@ -54,7 +54,7 @@ Status 2026-10-08: **tried once, works, undocumented.** `GET https://api.anthrop
 | `seven_day.utilization`, `seven_day.resets_at` | the same for the 7-day window |
 | further fields (`seven_day_opus`, `seven_day_sonnet`, `extra_usage`, `limits` and others with changing names) | present or `null`; not used |
 
-The token needs the scope `user:profile`, which the stored token of Claude Code has. Its access part is valid for about 8 hours; Claude Code renews it when it is used. A second program that renews it could invalidate the sign-in of Claude Code, so the cockpit never renews it (REQ-019).
+The token needs the scope `user:profile`, which the stored token of Claude Code has. Its access part is valid for about 8 hours; Claude Code renews it when it is used. A second program that renews it could invalidate the sign-in of Claude Code, so the cockpit never renews it (REQ-124).
 
 What is **not** known or **not official** (community reports, found by a research agent on 2026-10-08 and not verified by hand; the sources are forums, issue trackers and blogs, not Anthropic documents):
 
@@ -62,7 +62,7 @@ What is **not** known or **not official** (community reports, found by a researc
 - The token made by `claude setup-token` reportedly has only the scope `user:inference` and cannot read the usage figures.
 - The endpoint may answer with rate limiting (HTTP 429), may change or disappear without notice, and the reports name no account action against usage monitors (none found, not a guarantee).
 
-Decision of the owner (2026-10-08): use the stored token of Claude Code, read-only, never renewed, nothing else (REQ-019, REQ-103, REQ-104). Whether the terms of use allow this is the owner's position to take (decision D3 in REQ-019).
+Decision of the owner (2026-10-08): use the stored token of Claude Code, read-only, never renewed, nothing else (REQ-124, REQ-103, REQ-104). Whether the terms of use allow this is the owner's position to take (decision D3 in REQ-124).
 
 ## Sources
 
